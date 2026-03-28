@@ -28,7 +28,6 @@ import {
   getTopInterest, 
   getWeeklyChange,
   getActivitySummary,
-  getSentimentTrend
 } from "@/lib/activity";
 import { getUsedMinutesToday } from "@/lib/screen-time";
 import { 
@@ -51,19 +50,37 @@ interface AIInsights {
 const DashboardOverview = () => {
   const navigate = useNavigate();
   
-  // State for production-grade intelligence metrics
+  // State for real-time activity updates
+  const [activities, setActivities] = useState(getActivity());
   const [intelligence, setIntelligence] = useState<NewIntelligenceMetrics | null>(null);
   
-  // Get real activity from localStorage
-  const activities = getActivity();
+  // Update activities on mount and periodically
+  useEffect(() => {
+    const updateData = () => {
+      setActivities(getActivity());
+    };
+    updateData();
+    const interval = setInterval(updateData, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Check if we have data
   const hasData = activities.length > 0;
 
   // Real statistics from centralized utility
-  const totalQuestions = getTotalQuestions();
-  const flagged = getFlaggedCount();
-  const topInterest = getTopInterest();
+  const totalQuestions = activities.length;
+  const flagged = activities.filter(a => a.status === "filtered").length;
+  
+  // Interest mapping logic
+  const getTopInterestLocal = () => {
+    if (activities.length === 0) return "N/A";
+    const counts: Record<string, number> = {};
+    activities.forEach(a => {
+      counts[a.category] = (counts[a.category] || 0) + 1;
+    });
+    return Object.entries(counts).reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+  };
+  const topInterest = getTopInterestLocal();
   const weeklyChangeText = getWeeklyChange();
 
   // Real usage from screen-time utility
@@ -78,7 +95,7 @@ const DashboardOverview = () => {
 
   // Fetch Intelligence Metrics
   useEffect(() => {
-    const fetchIntelligence = async () => {
+    const fetchIntelligenceData = async () => {
       try {
         const metrics = await getLatestIntelligence();
         setIntelligence(metrics);
@@ -86,7 +103,10 @@ const DashboardOverview = () => {
         console.error("[Dashboard] Error fetching intelligence:", error);
       }
     };
-    fetchIntelligence();
+    
+    if (totalQuestions > 0) {
+      fetchIntelligenceData();
+    }
   }, [totalQuestions]);
 
   // Fetch AI Insights with caching
@@ -412,9 +432,6 @@ const DashboardOverview = () => {
       console.error("[Dashboard] Error explaining insight:", error);
     }
   }
-
-  // Sentiment trend data
-  const sentimentTrend = getSentimentTrend();
 
   return (
     <div className="space-y-6">
@@ -929,54 +946,6 @@ const DashboardOverview = () => {
           )}
         </motion.div>
       )}
-
-      {/* Sentiment Trend */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-      >
-        <Card className="p-8 shadow-card border-none bg-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-8 opacity-5">
-            <Sparkles className="h-32 w-32 text-primary" />
-          </div>
-          
-          <div className="flex items-center justify-between mb-10 relative z-10">
-            <div>
-              <h2 className="text-2xl font-black text-foreground tracking-tight">Sentiment trend</h2>
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">Weekly emotional stability</p>
-            </div>
-            <div className="px-4 py-2 rounded-2xl bg-mint/10 border border-mint/20">
-              <span className="text-xs font-black text-mint uppercase tracking-widest">
-                {sentimentTrend[6].score > 80 ? "Stable ✨" : "Volatile 📉"}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-end justify-between h-48 gap-4 px-2 relative z-10">
-            {sentimentTrend.map((day, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-4 group">
-                <div className="relative w-full flex flex-col items-center">
-                  <motion.div
-                    initial={{ height: 0 }}
-                    animate={{ height: `${day.score}%` }}
-                    transition={{ duration: 1, delay: 0.8 + i * 0.1 }}
-                    className={`w-full max-w-[40px] rounded-t-xl transition-all duration-300 ${
-                      day.score > 80 ? "bg-mint/40 group-hover:bg-mint" : 
-                      day.score > 50 ? "bg-orange-400/40 group-hover:bg-orange-400" : 
-                      "bg-destructive/40 group-hover:bg-destructive"
-                    }`}
-                  />
-                  <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-foreground text-background text-[10px] font-black px-2 py-1 rounded-lg">
-                    {day.score}%
-                  </div>
-                </div>
-                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{day.day}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </motion.div>
 
       {/* Child Intelligence Map */}
       <motion.div

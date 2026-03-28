@@ -665,6 +665,154 @@ app.post('/api/analyze-engagement', async (req, res) => {
   }
 });
 
+// 9. Sentiment Analysis Endpoint
+app.post('/api/analyze-sentiment', async (req, res) => {
+  const { message } = req.body;
+
+  if (!message) {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+
+  const systemPrompt = `
+    You are an AI sentiment analyzer for a child's educational app.
+    Analyze the emotional tone and curiosity of the following message:
+    
+    "{message}"
+    
+    Assign a sentiment score from 0 to 100 where:
+    - 90-100: Extremely positive, high curiosity, eager to learn.
+    - 70-89: Positive, friendly, general engagement.
+    - 50-69: Neutral, simple questions, basic facts.
+    - 30-49: Negative, frustrated, confused, or low engagement.
+    - 0-29: High risk, angry, distressed, or unsafe intent.
+    
+    Return STRICT JSON:
+    {
+      "score": number,
+      "label": "string (e.g., Eager, Curious, Neutral, Frustrated, Distressed)",
+      "explanation": "short explanation"
+    }
+    
+    Rules:
+    - Focus on child-appropriate emotional cues.
+    - High curiosity = Higher score.
+    - Blocked/unsafe intent = Very low score (0-20).
+    - Output JSON ONLY.
+  `;
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        messages: [
+          { role: "system", content: systemPrompt.replace("{message}", message) },
+          { role: "user", content: "Analyze the sentiment of this message." }
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" }
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Sentiment API Error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    
+    if (!content) throw new Error("Empty AI response");
+    
+    res.status(200).json(JSON.parse(content));
+  } catch (error) {
+    console.error("[Sentiment Analysis] Server error:", error);
+    res.status(200).json({
+      score: 70,
+      label: "Neutral",
+      explanation: "Analysis unavailable, defaulting to neutral."
+    });
+  }
+});
+
+// 10. Early Risk Analysis Endpoint (Crucial for Predictive Alerts)
+app.post('/api/analyze-early-risk', async (req, res) => {
+  const { messages } = req.body;
+
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ error: 'Messages array is required' });
+  }
+
+  const systemPrompt = `
+    You are an expert AI child safety and behavioral analyst.
+    Analyze the following recent messages (last 5-10) for early warning signs of emotional distress, frustration, or behavioral drift.
+    
+    Messages: ${JSON.stringify(messages)}
+    
+    Your task:
+    - Identify early signs of distress, anger, or confusion before they become critical risks.
+    - Determine if the combined behavior indicates a need for parent intervention.
+    
+    Return STRICT JSON:
+    {
+      "early_risk": true | false,
+      "risk_type": "emotional_build_up | frustration | confusion | suspicious | none",
+      "severity": "low | medium | high",
+      "confidence": number (0-100),
+      "explanation": "clear explanation of the early warning"
+    }
+    
+    Rules:
+    - Focus on PREDICTIVE signals.
+    - If the child is getting increasingly frustrated, mark as true.
+    - Output JSON ONLY.
+  `;
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: "Analyze the early risk in this message sequence." }
+        ],
+        temperature: 0.2,
+        response_format: { type: "json_object" }
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error(`[Early Risk] Groq API Error:`, errorData);
+      throw new Error(`Groq API Error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    
+    if (!content) throw new Error("Empty AI response");
+    
+    res.status(200).json(JSON.parse(content));
+  } catch (error) {
+    console.error("[Early Risk Analysis] Server error:", error);
+    res.status(200).json({
+      early_risk: false,
+      risk_type: "none",
+      severity: "low",
+      confidence: 0,
+      explanation: "Predictive analysis unavailable."
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Backend server running at http://localhost:${PORT}`);
 });

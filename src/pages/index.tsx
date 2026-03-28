@@ -8,6 +8,7 @@ import SuggestedActions from "@/components/SuggestedActions";
 import ChatInput from "@/components/ChatInput";
 import { askGroq } from "@/lib/groq";
 import { detectRiskyMessage, rewriteUnsafe, analyzeEarlyRisk } from "@/lib/safety";
+import { analyzeSentiment } from "@/lib/sentiment";
 import { createAlert, createEarlyWarningAlert } from "@/lib/alerts/alertService";
 import { generateQuiz } from "@/lib/intelligence/quiz";
 import avatarImg from "@/assets/ai-buddy.png";
@@ -131,6 +132,9 @@ const Index = () => {
     // Layer 1: Semantic Risk Detection
     const risk = await detectRiskyMessage(text);
     
+    // AI-Driven Sentiment Analysis (New)
+    const sentiment = await analyzeSentiment(text);
+    
     // Create alert if high risk
     await createAlert(text, risk);
 
@@ -216,6 +220,7 @@ const Index = () => {
           timestamp: Date.now(),
           status: "filtered",
           risk: risk,
+          sentimentScore: sentiment.score, // Use AI-driven sentiment
         });
         
         setIsLoading(false);
@@ -249,6 +254,7 @@ const Index = () => {
           timestamp: Date.now(),
           status: meta.status,
           risk: risk,
+          sentimentScore: sentiment.score, // Use AI-driven sentiment
         });
       } else {
         // Layer 3: Fallback to mock response if API fails
@@ -278,6 +284,7 @@ const Index = () => {
           timestamp: Date.now(),
           status: meta.status,
           risk: risk,
+          sentimentScore: sentiment.score, // Use AI-driven sentiment
         });
       }
     } catch (error) {
@@ -309,6 +316,7 @@ const Index = () => {
         timestamp: Date.now(),
         status: meta.status,
         risk: risk,
+        sentimentScore: sentiment.score, // Use AI-driven sentiment
       });
     } finally {
       setIsLoading(false);

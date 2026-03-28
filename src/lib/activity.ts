@@ -12,6 +12,7 @@ export interface Activity {
   status: "safe" | "filtered" | "guided";
   timestamp: number;
   risk?: RiskResult; // Added for semantic risk analysis
+  sentimentScore?: number; // AI-driven sentiment score (0-100)
 }
 
 /**
@@ -216,6 +217,7 @@ export function getWeeklyChange(): string {
 
 /**
  * Get sentiment trend for the last 7 days
+ * Upgraded to use AI-driven sentiment scores.
  */
 export function getSentimentTrend() {
   const activities = getActivity();
@@ -227,19 +229,30 @@ export function getSentimentTrend() {
     d.setDate(now.getDate() - (6 - i));
     const dayName = days[d.getDay()];
     
-    // Filter activities for this day
+    // Filter activities for this day (Today, Yesterday, etc.)
     const dayActivities = activities.filter(a => {
       const activityDate = new Date(a.timestamp);
-      return activityDate.toDateString() === d.toDateString();
+      // Reset hours to compare dates only
+      const comparisonDate = new Date(d);
+      comparisonDate.setHours(0, 0, 0, 0);
+      const activityComparisonDate = new Date(activityDate);
+      activityComparisonDate.setHours(0, 0, 0, 0);
+      
+      return activityComparisonDate.getTime() === comparisonDate.getTime();
     });
     
-    // Simple sentiment score: safe/total
+    // AI-Driven Sentiment Calculation
     let score = 0;
     if (dayActivities.length > 0) {
-      const safe = dayActivities.filter(a => a.status === "safe").length;
-      score = Math.round((safe / dayActivities.length) * 100);
+      // Average the AI sentiment scores
+      const totalSentiment = dayActivities.reduce((acc, a) => {
+        // Use AI score if exists, fallback to safety ratio logic
+        if (a.sentimentScore !== undefined) return acc + a.sentimentScore;
+        return acc + (a.status === "safe" ? 100 : 20);
+      }, 0);
+      score = Math.round(totalSentiment / dayActivities.length);
     } else {
-      score = 100; // Default to safe if no activity
+      score = 0; // Truly empty if no activity
     }
     
     return { day: dayName, score };
