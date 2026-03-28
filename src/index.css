@@ -1,0 +1,104 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer base {
+  :root {
+    --background: 72 17% 97%;
+    --foreground: 160 25% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 160 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 25% 15%;
+
+    --primary: 151 39% 49%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 159 45% 61%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 72 10% 92%;
+    --muted-foreground: 160 10% 45%;
+
+    --accent: 43 100% 51%;
+    --accent-foreground: 30 40% 15%;
+
+    --destructive: 0 71% 67%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 151 20% 90%;
+    --input: 151 20% 90%;
+    --ring: 151 39% 49%;
+
+    --radius: 1.25rem;
+
+    /* Custom tokens */
+    --mint: 159 45% 61%;
+    --mint-foreground: 0 0% 100%;
+    --peach: 15 90% 72%;
+    --peach-foreground: 0 0% 100%;
+    --lavender: 270 60% 75%;
+    --lavender-foreground: 0 0% 100%;
+    --sky: 200 80% 70%;
+    --sky-foreground: 0 0% 100%;
+    --sunny: 43 100% 51%;
+    --sunny-foreground: 30 40% 15%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(151 39% 49%), hsl(159 45% 61%));
+    --gradient-warm: linear-gradient(135deg, hsl(43 100% 51%), hsl(25 95% 65%));
+    --gradient-mint: linear-gradient(135deg, hsl(159 45% 61%), hsl(170 40% 55%));
+    --gradient-fun: linear-gradient(135deg, hsl(151 39% 49%), hsl(43 100% 51%));
+
+    --shadow-soft: 0 10px 30px -10px hsl(151 39% 49% / 0.15);
+    --shadow-card: 0 8px 24px -4px hsl(160 25% 15% / 0.05);
+    --shadow-glow: 0 0 40px -10px hsl(151 39% 49% / 0.2);
+
+    --sidebar-background: 72 17% 98%;
+    --sidebar-foreground: 160 25% 20%;
+    --sidebar-primary: 151 39% 49%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 151 20% 94%;
+    --sidebar-accent-foreground: 151 39% 40%;
+    --sidebar-border: 151 20% 92%;
+    --sidebar-ring: 151 39% 49%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-nunito antialiased;
+  }
+}
+
+@layer utilities {
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  .gradient-warm {
+    background: var(--gradient-warm);
+  }
+  .gradient-mint {
+    background: var(--gradient-mint);
+  }
+  .gradient-fun {
+    background: var(--gradient-fun);
+  }
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+}
