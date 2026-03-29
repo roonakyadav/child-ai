@@ -78,6 +78,9 @@ export interface AppConfig {
   };
 }
 
+// Support for VITE_API_URL environment variable with fallback for development
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+
 const DEFAULT_CONFIG: AppConfig = {
   ai: {
     defaultGreeting: "Hey there! 🌟 I'm so happy to see you! What would you like to explore today? You can pick one of the buttons below, or ask me anything!",
@@ -201,7 +204,7 @@ const DEFAULT_CONFIG: AppConfig = {
     defaultPin: "1234",
   },
   api: {
-    baseUrl: "http://localhost:3001",
+    baseUrl: API_BASE_URL,
     chat: "/api/chat",
     intelligence: "/api/analyze-intelligence",
     decisionEngine: "/api/decision-engine",

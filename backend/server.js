@@ -5,7 +5,7 @@ const cors = require('cors');
 const axios = require('axios');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
@@ -834,7 +834,7 @@ app.post('/api/generate-full-report', async (req, res) => {
       response_format: { type: "json_object" }
     }, {
       headers: {
-        "Authorization": `Bearer ${GROQ_REPORT_KEY}`,
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       }
     });
