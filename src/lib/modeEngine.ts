@@ -2,12 +2,24 @@ import { AIMode, MODES, ModeConfig } from "./modes";
 
 const CURRENT_MODE_KEY = "child_ai_current_mode";
 const STRICT_MODE_KEY = "child_ai_strict_mode";
+const MODE_EXPIRATION_KEY = "child_ai_mode_expiration";
+
+const MODE_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
  * Get the current active mode from localStorage.
- * Defaults to 'learning'.
+ * Automatically reverts to 'learning' if expired.
  */
 export function getCurrentMode(): AIMode {
+  const expiration = localStorage.getItem(MODE_EXPIRATION_KEY);
+  const now = Date.now();
+
+  if (expiration && now > parseInt(expiration)) {
+    // Mode has expired, revert to default
+    setCurrentMode("learning");
+    return "learning";
+  }
+
   const mode = localStorage.getItem(CURRENT_MODE_KEY) as AIMode;
   return mode || "learning";
 }
@@ -21,12 +33,27 @@ export function getCurrentModeConfig(): ModeConfig {
 }
 
 /**
- * Set the current active mode and persist to localStorage.
+ * Set the current active mode and persist to localStorage with a 30-min expiration.
  */
 export function setCurrentMode(mode: AIMode): void {
+  const expiration = Date.now() + MODE_DURATION_MS;
+  
   localStorage.setItem(CURRENT_MODE_KEY, mode);
-  // Dispatch custom event for instant UI updates if needed
-  window.dispatchEvent(new CustomEvent("ai-mode-changed", { detail: mode }));
+  localStorage.setItem(MODE_EXPIRATION_KEY, expiration.toString());
+  
+  // Dispatch custom event for instant UI updates
+  window.dispatchEvent(new CustomEvent("ai-mode-changed", { detail: { mode, expiration } }));
+}
+
+/**
+ * Get remaining time for the current mode in milliseconds.
+ */
+export function getModeRemainingTime(): number {
+  const expiration = localStorage.getItem(MODE_EXPIRATION_KEY);
+  if (!expiration) return 0;
+  
+  const remaining = parseInt(expiration) - Date.now();
+  return Math.max(0, remaining);
 }
 
 /**

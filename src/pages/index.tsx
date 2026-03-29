@@ -18,8 +18,8 @@ import { saveActivity, getCategory } from "@/lib/activity";
 import { isAppBlocked, addUsageSession } from "@/lib/screen-time";
 import { getMode as getInterventionMode, trackAndAutoReset } from "@/lib/intervention/modeService";
 import { addMessageToActiveInterventions } from "@/lib/intervention/interventionService";
-import { getCurrentMode, getCurrentModeConfig, setCurrentMode, isStrictModeEnabled } from "@/lib/modeEngine";
-import { Lock, Timer, Heart, ShieldAlert } from "lucide-react";
+import { getCurrentMode, getCurrentModeConfig, setCurrentMode, isStrictModeEnabled, getModeRemainingTime } from "@/lib/modeEngine";
+import { Lock, Timer, Heart, ShieldAlert, Hourglass } from "lucide-react";
 import { AIMode } from "@/lib/modes";
 import { InteractionContext } from "@/types";
 import { getConfig } from "@/lib/configStore";
@@ -64,6 +64,7 @@ const Index = () => {
     }));
   });
   const [aiMode, setAiMode] = useState<AIMode>(getCurrentMode());
+  const [remainingTime, setRemainingTime] = useState<number>(getModeRemainingTime());
   const [isLoading, setIsLoading] = useState(false);
   const [blockStatus, setBlockStatus] = useState(isAppBlocked());
   const [interactionContext, setInteractionContext] = useState<InteractionContext>({ type: null });
@@ -77,6 +78,7 @@ const Index = () => {
   const handleModeChange = (newMode: AIMode) => {
     setCurrentMode(newMode);
     setAiMode(newMode);
+    setRemainingTime(getModeRemainingTime());
     setToast({ 
       message: `Switched to ${getCurrentModeConfig().label}`, 
       type: "success" 
@@ -84,13 +86,25 @@ const Index = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Update block status periodically
+  // Update block status and remaining time periodically
   useEffect(() => {
     const interval = setInterval(() => {
       setBlockStatus(isAppBlocked());
+      
+      const currentMode = getCurrentMode();
+      if (currentMode !== aiMode) {
+        setAiMode(currentMode);
+      }
+      setRemainingTime(getModeRemainingTime());
     }, 10000); // Check every 10 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [aiMode]);
+
+  // Format remaining time for UI
+  const formatRemainingTime = (ms: number) => {
+    const mins = Math.ceil(ms / 60000);
+    return `${mins}m`;
+  };
 
   // Track session on unmount or beforeunload
   useEffect(() => {
@@ -374,6 +388,12 @@ const Index = () => {
           >
             <div className={`h-2 w-2 rounded-full animate-pulse ${aiMode === "learning" ? "bg-primary" : "bg-accent"}`} />
             Mode: {getCurrentModeConfig().label} {getCurrentModeConfig().icon}
+            {aiMode !== "learning" && remainingTime > 0 && (
+              <span className="ml-2 pl-2 border-l border-muted/20 text-muted-foreground flex items-center gap-1">
+                <Hourglass className="h-2.5 w-2.5 animate-spin-slow" />
+                {formatRemainingTime(remainingTime)}
+              </span>
+            )}
           </button>
         </motion.div>
 
