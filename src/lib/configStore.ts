@@ -220,7 +220,24 @@ export function getConfig(): AppConfig {
       saveConfig(DEFAULT_CONFIG);
       return DEFAULT_CONFIG;
     }
-    return JSON.parse(data);
+    
+    const stored = JSON.parse(data);
+    
+    // Merge stored config with DEFAULT_CONFIG to ensure all keys exist
+    // This handles cases where new config fields were added in updates
+    const merged = {
+      ...DEFAULT_CONFIG,
+      ...stored,
+      // Deep merge for nested objects if necessary (ai, behavior, etc)
+      ai: { ...DEFAULT_CONFIG.ai, ...stored.ai },
+      behavior: { ...DEFAULT_CONFIG.behavior, ...stored.behavior },
+      gamification: { ...DEFAULT_CONFIG.gamification, ...stored.gamification },
+      intelligence: { ...DEFAULT_CONFIG.intelligence, ...stored.intelligence },
+      screenTime: { ...DEFAULT_CONFIG.screenTime, ...stored.screenTime },
+      api: { ...DEFAULT_CONFIG.api, ...stored.api },
+    };
+
+    return merged;
   } catch (error) {
     console.error("[ConfigStore] Error reading config:", error);
     return DEFAULT_CONFIG;
