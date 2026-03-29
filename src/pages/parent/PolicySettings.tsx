@@ -307,21 +307,37 @@ const PolicySettings = () => {
           </motion.div>
 
           {/* 5. Advanced Instructions (Secondary) */}
-          <section>
-            <button
+          <section className="mt-4">
+            <motion.button
               onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
-              className="flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] hover:text-primary transition-colors group mb-4"
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              className={`flex w-full items-center justify-between p-6 rounded-[32px] border transition-all shadow-soft group ${
+                isAdvancedOpen ? "bg-secondary text-white border-secondary" : "bg-white border-white hover:border-secondary/20"
+              }`}
             >
-              <ChevronDown className={`h-3 w-3 transition-transform ${isAdvancedOpen ? "rotate-180" : ""}`} />
-              Advanced Custom Instructions
-            </button>
+              <div className="flex items-center gap-4">
+                <div className={`h-12 w-12 flex items-center justify-center rounded-2xl transition-colors ${
+                  isAdvancedOpen ? "bg-white/20" : "bg-secondary/10 text-secondary"
+                }`}>
+                  <Settings2 className="h-6 w-6" />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-sm font-black uppercase tracking-widest">Advanced Custom Instructions</h3>
+                  <p className={`text-[10px] font-bold mt-0.5 ${isAdvancedOpen ? "text-white/70" : "text-muted-foreground"}`}>
+                    Add specific rules and behavioral overrides for the AI
+                  </p>
+                </div>
+              </div>
+              <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${isAdvancedOpen ? "rotate-180" : ""}`} />
+            </motion.button>
 
             <AnimatePresence>
               {isAdvancedOpen && (
                 <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
+                  initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                  animate={{ height: "auto", opacity: 1, marginTop: 16 }}
+                  exit={{ height: 0, opacity: 0, marginTop: 0 }}
                   className="overflow-hidden"
                 >
                   <div className="rounded-[40px] bg-white p-8 border border-white shadow-soft">
