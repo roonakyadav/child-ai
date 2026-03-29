@@ -16,9 +16,9 @@ import { getPolicy } from "@/lib/policy";
 import { analyzeMessages, saveIntelligenceMetrics } from "@/lib/intelligence";
 import { saveActivity, getCategory } from "@/lib/activity";
 import { isAppBlocked, addUsageSession } from "@/lib/screen-time";
-import { getMode as getInterventionMode, trackAndAutoReset } from "@/lib/intervention/modeService";
+import { getMode as getInterventionMode, trackAndAutoReset, getInterventionRemainingTime } from "@/lib/intervention/modeService";
 import { addMessageToActiveInterventions } from "@/lib/intervention/interventionService";
-import { getCurrentMode, getCurrentModeConfig, setCurrentMode, isStrictModeEnabled, getModeRemainingTime } from "@/lib/modeEngine";
+import { getCurrentMode, getCurrentModeConfig, setCurrentMode, isStrictModeEnabled, getModeRemainingTime, getStrictModeRemainingTime } from "@/lib/modeEngine";
 import { Lock, Timer, Heart, ShieldAlert, Hourglass } from "lucide-react";
 import { AIMode } from "@/lib/modes";
 import { InteractionContext } from "@/types";
@@ -65,6 +65,8 @@ const Index = () => {
   });
   const [aiMode, setAiMode] = useState<AIMode>(getCurrentMode());
   const [remainingTime, setRemainingTime] = useState<number>(getModeRemainingTime());
+  const [strictRemaining, setStrictRemaining] = useState<number>(getStrictModeRemainingTime());
+  const [interventionRemaining, setInterventionRemaining] = useState<number>(getInterventionRemainingTime());
   const [isLoading, setIsLoading] = useState(false);
   const [blockStatus, setBlockStatus] = useState(isAppBlocked());
   const [interactionContext, setInteractionContext] = useState<InteractionContext>({ type: null });
@@ -96,6 +98,8 @@ const Index = () => {
         setAiMode(currentMode);
       }
       setRemainingTime(getModeRemainingTime());
+      setStrictRemaining(getStrictModeRemainingTime());
+      setInterventionRemaining(getInterventionRemainingTime());
     }, 10000); // Check every 10 seconds
     return () => clearInterval(interval);
   }, [aiMode]);
@@ -409,7 +413,13 @@ const Index = () => {
                 : "bg-destructive/5 text-destructive border-destructive/20"
             }`}>
               {currentInterventionMode === "support" ? <Heart className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
-              {currentInterventionMode === "support" ? "Support Mode Active" : "Strict Mode Active"}
+              {currentInterventionMode === "support" ? "Support Mode" : "Strict Mode"}
+              {interventionRemaining > 0 && (
+                <span className="ml-2 pl-2 border-l border-current/20 flex items-center gap-1 opacity-70">
+                  <Hourglass className="h-2.5 w-2.5 animate-spin-slow" />
+                  {formatRemainingTime(interventionRemaining)}
+                </span>
+              )}
             </span>
           </motion.div>
         )}
@@ -418,11 +428,16 @@ const Index = () => {
           <motion.div
             initial={{ opacity: 0, scale: 0.9, x: -20 }}
             animate={{ opacity: 1, scale: 1, x: 0 }}
-            className="z-10"
           >
-            <span className="inline-flex items-center gap-2 rounded-2xl px-5 py-2 text-xs font-black uppercase tracking-widest shadow-soft border bg-destructive text-white border-destructive/20">
-              <ShieldAlert className="h-3 w-3" />
-              Global Strict Mode
+            <span className="inline-flex items-center gap-2 rounded-2xl px-5 py-2 text-xs font-black uppercase tracking-widest shadow-soft border bg-red-50 text-red-700 border-red-200">
+              <Shield className="h-3 w-3" />
+              Parental Strict Mode
+              {strictRemaining > 0 && (
+                <span className="ml-2 pl-2 border-l border-red-200 flex items-center gap-1 opacity-70">
+                  <Hourglass className="h-2.5 w-2.5 animate-spin-slow" />
+                  {formatRemainingTime(strictRemaining)}
+                </span>
+              )}
             </span>
           </motion.div>
         )}

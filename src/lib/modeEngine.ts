@@ -3,6 +3,7 @@ import { AIMode, MODES, ModeConfig } from "./modes";
 const CURRENT_MODE_KEY = "child_ai_current_mode";
 const STRICT_MODE_KEY = "child_ai_strict_mode";
 const MODE_EXPIRATION_KEY = "child_ai_mode_expiration";
+const STRICT_MODE_EXPIRATION_KEY = "child_ai_strict_mode_expiration";
 
 const MODE_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -16,7 +17,8 @@ export function getCurrentMode(): AIMode {
 
   if (expiration && now > parseInt(expiration)) {
     // Mode has expired, revert to default
-    setCurrentMode("learning");
+    localStorage.removeItem(MODE_EXPIRATION_KEY);
+    localStorage.setItem(CURRENT_MODE_KEY, "learning");
     return "learning";
   }
 
@@ -58,17 +60,46 @@ export function getModeRemainingTime(): number {
 
 /**
  * Check if global Strict Mode is enabled.
+ * Reverts to false if expired.
  */
 export function isStrictModeEnabled(): boolean {
+  const expiration = localStorage.getItem(STRICT_MODE_EXPIRATION_KEY);
+  const now = Date.now();
+
+  if (expiration && now > parseInt(expiration)) {
+    localStorage.removeItem(STRICT_MODE_EXPIRATION_KEY);
+    localStorage.setItem(STRICT_MODE_KEY, "false");
+    return false;
+  }
+
   return localStorage.getItem(STRICT_MODE_KEY) === "true";
 }
 
 /**
- * Toggle global Strict Mode.
+ * Toggle global Strict Mode with 30-min expiration.
  */
 export function setStrictMode(enabled: boolean): void {
   localStorage.setItem(STRICT_MODE_KEY, String(enabled));
+  
+  if (enabled) {
+    const expiration = Date.now() + MODE_DURATION_MS;
+    localStorage.setItem(STRICT_MODE_EXPIRATION_KEY, expiration.toString());
+  } else {
+    localStorage.removeItem(STRICT_MODE_EXPIRATION_KEY);
+  }
+  
   window.dispatchEvent(new CustomEvent("strict-mode-changed", { detail: enabled }));
+}
+
+/**
+ * Get remaining time for Strict Mode in milliseconds.
+ */
+export function getStrictModeRemainingTime(): number {
+  const expiration = localStorage.getItem(STRICT_MODE_EXPIRATION_KEY);
+  if (!expiration) return 0;
+  
+  const remaining = parseInt(expiration) - Date.now();
+  return Math.max(0, remaining);
 }
 
 /**

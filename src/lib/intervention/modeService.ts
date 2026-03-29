@@ -35,7 +35,7 @@ export function resetMode(): void {
 
 /**
  * Tracks usage and auto-resets mode if limits are reached.
- * Limits: 5 messages OR 10 minutes.
+ * Limits: 10 messages OR 30 minutes.
  */
 export function trackAndAutoReset(): void {
   const mode = getMode();
@@ -47,10 +47,10 @@ export function trackAndAutoReset(): void {
   const metadata: ModeMetadata = JSON.parse(storedMetadata);
   metadata.messageCount += 1;
 
-  const TEN_MINUTES = 10 * 60 * 1000;
-  const MESSAGE_LIMIT = 5;
+  const THIRTY_MINUTES = 30 * 60 * 1000;
+  const MESSAGE_LIMIT = 10;
 
-  const isTimeUp = Date.now() - metadata.startTime > TEN_MINUTES;
+  const isTimeUp = Date.now() - metadata.startTime > THIRTY_MINUTES;
   const isMessageLimitReached = metadata.messageCount >= MESSAGE_LIMIT;
 
   if (isTimeUp || isMessageLimitReached) {
@@ -58,4 +58,21 @@ export function trackAndAutoReset(): void {
   } else {
     localStorage.setItem(MODE_METADATA_KEY, JSON.stringify(metadata));
   }
+}
+
+/**
+ * Get remaining time for current intervention mode in milliseconds.
+ */
+export function getInterventionRemainingTime(): number {
+  const mode = getMode();
+  if (mode === "normal") return 0;
+
+  const storedMetadata = localStorage.getItem(MODE_METADATA_KEY);
+  if (!storedMetadata) return 0;
+
+  const metadata: ModeMetadata = JSON.parse(storedMetadata);
+  const THIRTY_MINUTES = 30 * 60 * 1000;
+  
+  const remaining = (metadata.startTime + THIRTY_MINUTES) - Date.now();
+  return Math.max(0, remaining);
 }

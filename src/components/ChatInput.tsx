@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Send, Mic } from "lucide-react";
-import { useVoice } from "@/hooks/useVoice";
+import { Send } from "lucide-react";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -9,28 +8,11 @@ interface ChatInputProps {
 
 const ChatInput = ({ onSend }: ChatInputProps) => {
   const [value, setValue] = useState("");
-  const { transcript, isListening, startListening, stopListening, resetTranscript } = useVoice();
-
-  // Update input value when transcript changes
-  useEffect(() => {
-    if (transcript) {
-      setValue(transcript);
-    }
-  }, [transcript]);
 
   const handleSend = () => {
     if (!value.trim()) return;
     onSend(value.trim());
     setValue("");
-    resetTranscript();
-  };
-
-  const toggleVoice = () => {
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
   };
 
   return (
@@ -50,18 +32,6 @@ const ChatInput = ({ onSend }: ChatInputProps) => {
           className="w-full rounded-[2rem] border border-primary/10 bg-white px-8 py-5 text-[15px] font-bold text-foreground placeholder:text-muted-foreground/60 shadow-card outline-none ring-primary/20 focus:ring-4 transition-all group-hover:border-primary/20 group-hover:shadow-soft"
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-          <motion.button
-            whileHover={{ scale: 1.1, rotate: isListening ? 0 : 5 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={toggleVoice}
-            className={`flex h-10 w-10 items-center justify-center rounded-2xl transition-all ${
-              isListening 
-                ? "bg-destructive text-white shadow-soft" 
-                : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-primary"
-            }`}
-          >
-            <Mic className={`h-5 w-5 ${isListening ? "animate-pulse" : ""}`} />
-          </motion.button>
           <motion.button
             whileHover={{ scale: 1.1, x: 2 }}
             whileTap={{ scale: 0.9 }}
