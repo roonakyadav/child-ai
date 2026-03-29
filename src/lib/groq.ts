@@ -3,13 +3,15 @@
  * Calls /api/chat serverless function instead of Groq directly
  */
 
-import { getPolicy, buildSystemPrompt } from "@/lib/policy";
-import { getMode as getInterventionMode } from "@/lib/intervention/modeService";
-import { getInjections, clearInjections } from "@/lib/intervention/injectionService";
-import { getSystemInstructions as getEngineInstructions } from "@/lib/modeEngine";
+import { buildSystemPrompt } from "@/lib/policy";
+import { getMessages, addUserMessage, addAssistantMessage } from "@/lib/conversationStore";
+import { logInteraction } from "@/lib/activityLogger";
+import { getIntentState, setIntent } from "@/lib/intentStore";
+import { getConfig } from "@/lib/configStore";
 
-const BACKEND_API_URL = "http://localhost:3001/api/chat";
-const GROQ_MODEL = "llama-3.1-8b-instant";
+const config = getConfig();
+const BACKEND_API_URL = `${config.api.baseUrl}${config.api.chat}`;
+const GROQ_MODEL = config.api.model;
 
 export interface GroqMessage {
   role: "user" | "assistant" | "system";
@@ -19,88 +21,40 @@ export interface GroqMessage {
 /**
  * Call Backend API to get AI response
  * @param prompt - User's input text
+ * @param intent - Optional intent tagging for context (e.g., 'joke', 'story')
  * @returns AI response text or null if error occurs
  */
-export async function askGroq(prompt: string): Promise<string | null> {
-  // Get parent policy and build system prompt
-  const policy = getPolicy();
-  
-  // Get parent actions
-  const actions = JSON.parse(localStorage.getItem("parent_actions") || "[]");
-  const activeActions = actions.map((a: any) => a.type);
-  
-  // Build base system prompt
-  let systemPrompt = buildSystemPrompt(policy);
-
-  // Add Mode Engine Instructions (Learning, Fun, Exploration, Focus + Global Strict Mode)
-  systemPrompt += `\n\n[CURRENT AI BEHAVIOR MODE]:\n${getEngineInstructions()}`;
-
-  // Add Multi-step Interaction Handling
-  systemPrompt += `\n\n[INTERACTION CONTEXT]:
-- If the user is answering a quiz or MCQ, interpret short inputs like 'A', 'B', 'C', 'D' (or '1', '2', etc.) as answers to your previous question.
-- Evaluate correctness based on the context of the conversation.
-- If you just asked a question, expect the next message to be an answer.`;
-
-  // Add Intervention Mode instructions (Parental override)
-  const currentInterventionMode = getInterventionMode();
-  if (currentInterventionMode === "support") {
-    systemPrompt += `\n\n[PARENT INTERVENTION: SUPPORT MODE ACTIVE]
-- Maintain a calm, empathetic, and warm tone.
-- Focus on emotional validation and helping the child process their feelings.
-- Avoid logic-heavy explanations or being overly academic.
-- Prioritize the child's emotional well-being over information delivery.`;
-  } else if (currentInterventionMode === "strict") {
-    systemPrompt += `\n\n[PARENT INTERVENTION: STRICT MODE ACTIVE]
-- Be extremely cautious and protective.
-- Aggressively block any topics that could be remotely unsafe or sensitive.
-- If the conversation drifts toward risky territory, immediately and firmly redirect to safe, educational, or fun topics (like science, art, or friendly stories).
-- Do not engage with any emotional distress; instead, provide a safe and structured environment.`;
-  }
-
-  // Add injected system messages
-  const injections = getInjections();
-  if (injections.length > 0) {
-    systemPrompt += `\n\n[DIRECT PARENT INSTRUCTIONS]:\n`;
-    systemPrompt += injections.map(msg => `- ${msg}`).join("\n");
-    // Clear injections after use
-    clearInjections();
-  }
-  
-  // Add parent action modes if any are active
-  if (activeActions.length > 0) {
-    systemPrompt += `\n\nParent has enabled the following learning support modes:\n`;
-    systemPrompt += activeActions.map((type: string) => `- ${type}`).join("\n");
-    systemPrompt += `\n\nAdjust your responses accordingly:`;
+export async function askGroq(prompt: string, intent?: string): Promise<string | null> {
+  // 1. Update global intent state if provided
+  if (intent) {
+    setIntent(intent as any);
+  } else {
+    // Basic auto-reset: if input is a short animal or random word while in quiz/game,
+    // and it's not a single letter A-D, we might want to reset intent to general.
+    const intentState = getIntentState();
+    const isShortWord = prompt.split(" ").length <= 2;
+    const isLikelyNotAnswer = !/^[A-D]$|^[1-4]$/i.test(prompt.trim());
     
-    if (activeActions.includes("attention_support")) {
-      systemPrompt += `\n- Use shorter, clearer responses`;
-      systemPrompt += `\n- Ask engaging questions to maintain focus`;
-      systemPrompt += `\n- Break complex topics into smaller steps`;
-    }
-    
-    if (activeActions.includes("math_support")) {
-      systemPrompt += `\n- Provide step-by-step explanations for math topics`;
-      systemPrompt += `\n- Use concrete examples and real-world applications`;
-      systemPrompt += `\n- Encourage problem-solving approach`;
-    }
-    
-    if (activeActions.includes("curiosity_boost")) {
-      systemPrompt += `\n- Encourage exploration and questions`;
-      systemPrompt += `\n- Connect topics to broader concepts`;
-      systemPrompt += `\n- Foster natural curiosity`;
-    }
-    
-    if (activeActions.includes("creativity_encouragement")) {
-      systemPrompt += `\n- Use imaginative language and metaphors`;
-      systemPrompt += `\n- Encourage creative thinking`;
-      systemPrompt += `\n- Support storytelling and expression`;
-    }
-    
-    if (activeActions.includes("general_support")) {
-      systemPrompt += `\n- Be supportive and encouraging`;
-      systemPrompt += `\n- Adapt to child's learning style`;
+    // Do NOT reset intent if there is an active quiz
+    if (intentState.currentIntent !== "general" && !intentState.activeQuiz && isShortWord && isLikelyNotAnswer) {
+      if (prompt.length > 5) setIntent("general");
     }
   }
+
+  // Build base system prompt from parent AI configuration (now includes intent, rules, and ordering)
+  let systemPrompt = buildSystemPrompt();
+
+  // Detect Ambiguity
+  const words = prompt.trim().split(/\s+/);
+  const isAmbiguous = words.length <= 2 && 
+                     !/tell|show|explain|quiz|joke|story|fact|help|how|why|what|when|where/i.test(prompt);
+  
+  if (isAmbiguous && intent !== "quiz" && intent !== "game") {
+    systemPrompt += `\n\n[AMBIGUITY WARNING]: The user input is very short and lacks clear intent. You MUST ask a clarifying question instead of starting a new activity.`;
+  }
+
+  // Get conversation history (last 10 messages for better context weighting)
+  const history = getMessages().slice(-10);
 
   try {
     const response = await fetch(BACKEND_API_URL, {
@@ -115,6 +69,7 @@ export async function askGroq(prompt: string): Promise<string | null> {
             role: "system",
             content: systemPrompt,
           },
+          ...history,
           {
             role: "user",
             content: prompt,
@@ -132,7 +87,19 @@ export async function askGroq(prompt: string): Promise<string | null> {
     const data = await response.json();
     
     if (data.choices && data.choices.length > 0) {
-      return data.choices[0].message?.content || null;
+      const aiText = data.choices[0].message?.content || null;
+      if (aiText) {
+        // Store in global memory
+        addUserMessage(prompt);
+        addAssistantMessage(aiText);
+        
+        // Log to Activity Feed
+        logInteraction({
+          userMessage: prompt,
+          aiResponse: aiText
+        });
+      }
+      return aiText;
     }
 
     console.warn("[Groq] No choices in backend response");

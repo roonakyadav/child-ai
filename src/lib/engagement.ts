@@ -2,12 +2,14 @@ import { Activity, Session } from "./intelligence/types";
 import { groupIntoSessions } from "./intelligence/aggregator";
 
 export interface EngagementIntelligence {
-  status: "High Engagement" | "Moderate Engagement" | "Low Engagement";
+  status: "High Engagement" | "Moderate Engagement" | "Developing Engagement";
   statusReason: string;
   problems: string[];
   trendExplanation: string;
   behaviorPattern: string;
   actionRecommendation: string;
+  activityLevel: "High" | "Medium" | "Low";
+  consistencyLevel: "High" | "Medium" | "Low";
 }
 
 /**
@@ -34,7 +36,7 @@ export async function getEngagementIntelligence(activities: Activity[]): Promise
   // 3. Determine Status
   let status: EngagementIntelligence["status"] = "Moderate Engagement";
   if (activeDays >= 5 && avgSessionLength >= 10) status = "High Engagement";
-  else if (activeDays < 3 || avgSessionLength < 4) status = "Low Engagement";
+  else if (activeDays < 3 || avgSessionLength < 4) status = "Developing Engagement";
 
   // 4. Call LLM for Deep Intelligence
   try {
@@ -65,17 +67,21 @@ export async function getEngagementIntelligence(activities: Activity[]): Promise
       statusReason: aiData.statusReason,
       trendExplanation: aiData.trendExplanation,
       behaviorPattern: aiData.behaviorPattern,
-      actionRecommendation: aiData.actionRecommendation
+      actionRecommendation: aiData.actionRecommendation,
+      activityLevel: aiData.activityLevel || (activities.length > 10 ? "High" : activities.length > 5 ? "Medium" : "Low"),
+      consistencyLevel: aiData.consistencyLevel || (activeDays >= 4 ? "High" : activeDays >= 2 ? "Medium" : "Low")
     };
   } catch (error) {
     console.error("[Engagement Intelligence] Error:", error);
     return {
       status,
       problems: problems.length > 0 ? problems : ["Consistent engagement patterns."],
-      statusReason: status === "Low Engagement" ? "Usage is inconsistent with short sessions." : "Usage patterns are stable.",
+      statusReason: status === "Developing Engagement" ? "Usage is starting to build with initial sessions." : "Usage patterns are stable.",
       trendExplanation: "Usage has been fluctuating over the last few days.",
-      behaviorPattern: "Irregular interaction bursts.",
-      actionRecommendation: "Encourage a consistent 5-minute daily check-in to build a learning habit."
+      behaviorPattern: "Initial interaction sessions.",
+      actionRecommendation: "Encourage a consistent 5-minute daily check-in to build a learning habit.",
+      activityLevel: activities.length > 10 ? "High" : activities.length > 5 ? "Medium" : "Low",
+      consistencyLevel: activeDays >= 4 ? "High" : activeDays >= 2 ? "Medium" : "Low"
     };
   }
 }

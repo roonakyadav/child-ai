@@ -4,6 +4,7 @@
  */
 
 import { RiskResult } from "./safety";
+import { getConfig } from "./configStore";
 
 export interface Activity {
   userText: string;
@@ -22,10 +23,20 @@ export interface Activity {
  */
 export function getCategory(text: string): string {
   const lower = text.toLowerCase();
+  const config = getConfig();
 
-  if (lower.includes("math") || /\d/.test(lower)) return "Math";
-  if (lower.includes("science") || lower.includes("why") || lower.includes("how")) return "Science";
-  if (lower.includes("story")) return "Stories";
+  // Find the first matching category from dynamic config
+  for (const category of config.categories) {
+    // Skip general as it's the fallback
+    if (category.id === "general") continue;
+
+    const matchesKeywords = category.keywords.some(k => lower.includes(k));
+    const matchesRegex = category.regex && new RegExp(category.regex).test(lower);
+
+    if (matchesKeywords || matchesRegex) {
+      return category.label;
+    }
+  }
 
   return "General";
 }
@@ -60,27 +71,68 @@ export interface ChildStats {
  */
 export function getChildStats(): ChildStats {
   const activities = getActivity();
-  const baseXP = activities.length * 10;
-  const quizXP = activities.filter(a => a.status === "safe" && a.category !== "General").length * 25;
-  const safetyBonus = activities.filter(a => a.status === "safe").length * 5;
+  const config = getConfig();
+  const xpConfig = config.gamification.xpMultipliers;
+
+  const baseXP = activities.length * xpConfig.base;
+  const quizXP = activities.filter(a => a.status === "safe" && a.category !== "General").length * xpConfig.quiz;
+  const safetyBonus = activities.filter(a => a.status === "safe").length * xpConfig.safety;
   
   const totalXP = baseXP + quizXP + safetyBonus;
   const level = Math.floor(Math.sqrt(totalXP / 50)) + 1;
   const currentLevelXP = Math.pow(level - 1, 2) * 50;
   const nextLevelXP = Math.pow(level, 2) * 50;
   
-  // Basic badges
-  const badges = [];
-  if (activities.length > 5) badges.push("Explorer 🧭");
-  if (activities.filter(a => a.category === "Math").length > 3) badges.push("Math Wizard 🔢");
-  if (activities.filter(a => a.category === "Science").length > 3) badges.push("Science Whiz 🧪");
+  // Dynamic badge evaluation
+  const badges = config.gamification.badges
+    .filter(badge => {
+      if (badge.condition === "total_activities") {
+        return activities.length > badge.threshold;
+      }
+      if (badge.condition.startsWith("category_")) {
+        const categoryLabel = badge.condition.replace("category_", "").toLowerCase();
+        return activities.filter(a => a.category.toLowerCase() === categoryLabel).length > badge.threshold;
+      }
+      return false;
+    })
+    .map(b => b.label);
+
+  // Real Streak Calculation
+  const getStreak = () => {
+    if (activities.length === 0) return 0;
+    
+    const dates = activities
+      .map(a => new Date(a.timestamp).toDateString())
+      .filter((v, i, a) => a.indexOf(v) === i); // Unique dates
+    
+    let streak = 0;
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    
+    // Check if they were active today or yesterday to continue streak
+    if (dates[0] !== today && dates[0] !== yesterday) return 0;
+    
+    for (let i = 0; i < dates.length - 1; i++) {
+      const d1 = new Date(dates[i]);
+      const d2 = new Date(dates[i+1]);
+      const diff = (d1.getTime() - d2.getTime()) / 86400000;
+      
+      if (Math.round(diff) === 1) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    
+    return streak + 1; // Add 1 for the first day
+  };
   
   return {
     level,
     xp: totalXP - currentLevelXP,
     nextLevelXp: nextLevelXP - currentLevelXP,
     badges,
-    streak: activities.length > 0 ? 1 : 0, // Mock streak for now
+    streak: getStreak(),
   };
 }
 

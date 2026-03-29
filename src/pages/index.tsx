@@ -8,7 +8,6 @@ import SuggestedActions from "@/components/SuggestedActions";
 import ChatInput from "@/components/ChatInput";
 import { askGroq } from "@/lib/groq";
 import { detectRiskyMessage, rewriteUnsafe, analyzeEarlyRisk } from "@/lib/safety";
-import { analyzeSentiment } from "@/lib/sentiment";
 import { createAlert, createEarlyWarningAlert } from "@/lib/alerts/alertService";
 import { generateQuiz } from "@/lib/intelligence/quiz";
 import avatarImg from "@/assets/ai-buddy.png";
@@ -23,6 +22,7 @@ import { getCurrentMode, getCurrentModeConfig, setCurrentMode, isStrictModeEnabl
 import { Lock, Timer, Heart, ShieldAlert } from "lucide-react";
 import { AIMode } from "@/lib/modes";
 import { InteractionContext } from "@/types";
+import { getConfig } from "@/lib/configStore";
 
 interface Message {
   text: string;
@@ -44,20 +44,25 @@ interface AIResponse {
   };
 }
 
-const aiResponses: Record<string, string> = {
-  "Help me with homework": "Great choice! 📚 What subject are you working on? I can help with math, science, reading, and more. Let's figure it out together!",
-  "Tell me a story": "Once upon a time, in a forest made of candy… 🍬 A brave little fox named Pixel discovered a hidden library inside a giant mushroom. Want me to continue? 📖",
-  "Explain something": "I love explaining things! 🧠 Pick a topic — like why the sky is blue, how volcanoes work, or what makes rainbows — and I'll break it down for you!",
-  "Fun facts": "Did you know? 🎉 Octopuses have THREE hearts and BLUE blood! Two hearts pump blood to their gills, and one pumps it to the rest of the body. How cool is that?",
-};
-
-const defaultGreeting: Message = {
-  text: "Hey there! 🌟 I'm so happy to see you! What would you like to explore today? You can pick one of the buttons below, or ask me anything!",
-  isAI: true,
-};
+import { getMessages, clearConversation } from "@/lib/conversationStore";
+import { addRecentTopic, getIntentState, setActiveQuiz } from "@/lib/intentStore";
 
 const Index = () => {
-  const [messages, setMessages] = useState<Message[]>([defaultGreeting]);
+  const config = getConfig();
+  
+  const defaultGreeting: Message = {
+    text: config.ai.defaultGreeting,
+    isAI: true,
+  };
+
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const history = getMessages();
+    if (history.length === 0) return [defaultGreeting];
+    return history.map(m => ({
+      text: m.content,
+      isAI: m.role === "assistant"
+    }));
+  });
   const [aiMode, setAiMode] = useState<AIMode>(getCurrentMode());
   const [isLoading, setIsLoading] = useState(false);
   const [blockStatus, setBlockStatus] = useState(isAppBlocked());
@@ -111,7 +116,7 @@ const Index = () => {
     }
   }, [messages]);
 
-  const handleSend = async (text: string) => {
+  const handleSend = async (text: string, intent?: string) => {
     // Prevent empty messages
     if (!text.trim()) return;
 
@@ -119,27 +124,15 @@ const Index = () => {
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
-    // Analyze messages for intelligence metrics after each new message
-    const allMessages = [...messages, userMsg];
-    const intelligenceData = analyzeMessages(
-      allMessages.map(m => ({
-        role: m.isAI ? "assistant" : "user",
-        text: m.text,
-      }))
-    );
-    saveIntelligenceMetrics(intelligenceData);
-
     // Layer 1: Semantic Risk Detection
     const risk = await detectRiskyMessage(text);
-    
-    // AI-Driven Sentiment Analysis (New)
-    const sentiment = await analyzeSentiment(text);
     
     // Create alert if high risk
     await createAlert(text, risk);
 
     // Predictive Risk Analysis (Async, non-blocking)
-    analyzeEarlyRisk(allMessages.map(m => ({ text: m.text, timestamp: Date.now() })))
+    const history = getMessages();
+    analyzeEarlyRisk([...history, { role: "user", content: text }].map(m => ({ text: m.content, timestamp: Date.now() })))
       .then(earlyRisk => {
         if (earlyRisk.early_risk && earlyRisk.confidence > 70) {
           createEarlyWarningAlert(text, earlyRisk);
@@ -147,54 +140,118 @@ const Index = () => {
       })
       .catch(err => console.error("[Chat] Early risk analysis failed:", err));
 
+    // Analyze messages for intelligence metrics (Async)
+    const intelligenceData = analyzeMessages([...history, { role: "user", content: text }].map(m => ({
+      role: m.role as "user" | "assistant",
+      text: m.content
+    })));
+    saveIntelligenceMetrics(intelligenceData);
+
     // Track for auto-reset of intervention mode
     trackAndAutoReset();
     
     // Track message for intervention outcome analysis
     addMessageToActiveInterventions(text);
 
-    // --- Interaction Context Handling ---
-    if (interactionContext.type === "quiz" && interactionContext.quiz) {
+    // --- Interaction Context Handling (DETERMINISTIC EVALUATION) ---
+    const currentIntentState = getIntentState();
+    const activeQuiz = currentIntentState.activeQuiz;
+    const isStopCommand = /stop quiz|quit|exit|cancel quiz/i.test(text);
+
+    if (activeQuiz) {
+      if (isStopCommand) {
+        setActiveQuiz(null);
+        setMessages((prev) => [...prev, { text: "Okay! Let's do something else. What's on your mind? 😊", isAI: true }]);
+        setIsLoading(false);
+        return;
+      }
+
       const normalizedInput = text.trim().toUpperCase();
-      const isShortAnswer = normalizedInput.length === 1 && /^[A-D]$/.test(normalizedInput);
+      const options = activeQuiz.options;
       
-      if (isShortAnswer) {
-        const isCorrect = normalizedInput === interactionContext.quiz.correct_answer.toUpperCase();
-        const responseText = isCorrect 
-          ? `🌟 **Spot on!** "${normalizedInput}" is the correct answer. You're doing amazing! Keep it up! 🚀`
-          : `😊 **Close!** The correct answer was actually **${interactionContext.quiz.correct_answer}**. But don't worry, every mistake is just a step towards learning something new! Want to try another one? ✨`;
+      // 1. Direct letter match (A, B, C, D)
+      let matchedLabel: "A" | "B" | "C" | "D" | null = null;
+      if (/^[A-D]$/.test(normalizedInput)) {
+        matchedLabel = normalizedInput as "A" | "B" | "C" | "D";
+      } else {
+        // 2. Text match (check if user typed the option text)
+        const entries = Object.entries(options) as [("A" | "B" | "C" | "D"), string][];
+        const match = entries.find(([_, value]) => 
+          normalizedInput.includes(value.toUpperCase()) || 
+          value.toUpperCase().includes(normalizedInput)
+        );
+        if (match) matchedLabel = match[0];
+      }
+
+      if (matchedLabel) {
+        const isCorrect = matchedLabel === activeQuiz.correctAnswer;
         
-        setMessages((prev) => [...prev, { text: responseText, isAI: true, meta: { status: "safe", reason: "Deterministic Quiz Evaluation" } }]);
-        setInteractionContext({ type: null }); // Reset context
+        // Use AI ONLY for tone and personalized feedback after we determine correctness
+        const feedbackPrompt = `The user answered "${text}" which corresponds to option ${matchedLabel} ("${options[matchedLabel]}").
+        The question was: "${activeQuiz.question}".
+        This is ${isCorrect ? 'CORRECT' : 'INCORRECT'}. 
+        The true correct answer was ${activeQuiz.correctAnswer}: ${options[activeQuiz.correctAnswer]}.
+        EXPLANATION: ${activeQuiz.explanation}.
+        
+        STRICT RULES:
+        1. Confirm if they were right or wrong clearly but kindly.
+        2. Use the provided EXPLANATION to teach them.
+        3. Keep the tone fun and encouraging.
+        4. Do NOT ask another quiz question yet.`;
+        
+        const aiText = await askGroq(feedbackPrompt, "quiz");
+        
+        if (aiText) {
+          setMessages((prev) => [...prev, { text: aiText, isAI: true, meta: { status: "safe", reason: "Quiz Feedback" } }]);
+        }
+        
+        setActiveQuiz(null); // Clear quiz state after answer
+        setIsLoading(false);
+        return;
+      } else {
+        // Mode Consistency: User didn't give a clear answer, so prompt them again
+        const fallbackPrompt = `The child said "${text}" but I'm waiting for an answer to this quiz: "${activeQuiz.question}". 
+        Options are: A: ${options.A}, B: ${options.B}, C: ${options.C}, D: ${options.D}.
+        Kindly remind them to pick one of the options (A, B, C, or D) or say "stop quiz" to quit.`;
+        
+        const aiText = await askGroq(fallbackPrompt, "quiz");
+        if (aiText) {
+          setMessages((prev) => [...prev, { text: aiText, isAI: true }]);
+        }
         setIsLoading(false);
         return;
       }
     }
 
     if (text.toLowerCase().includes("quiz me")) {
-      // Step 1: Start loading and generate structured quiz
       setIsLoading(true);
       const quiz = await generateQuiz();
       
       if (quiz) {
-        const quizText = `${quiz.question}\n\n${quiz.options.map(o => `**${o.label}**: ${o.text}`).join("\n")}`;
+        // Save structured state
+        setActiveQuiz(quiz);
+
+        const optionsText = Object.entries(quiz.options).map(([k, v]) => `${k}: ${v}`).join("\n");
+        const quizPrompt = `Ask this quiz question to the child: "${quiz.question}". 
+        OPTIONS:
+        ${optionsText}
+        Make it sound exciting and friendly.`;
         
-        setMessages((prev) => [
-          ...prev, 
-          { 
-            text: quizText, 
-            isAI: true, 
-            meta: { status: "safe", reason: "Structured Quiz Generation" } 
-          }
-        ]);
+        const aiText = await askGroq(quizPrompt, "quiz");
         
-        setInteractionContext({
-          type: "quiz",
-          quiz: quiz,
-        });
+        if (aiText) {
+          setMessages((prev) => [
+            ...prev, 
+            { 
+              text: aiText, 
+              isAI: true, 
+              meta: { status: "safe", reason: "Structured Quiz Generation" } 
+            }
+          ]);
+        }
         
         setIsLoading(false);
-        return; // Important: Don't fall through to generic AI response
+        return;
       }
     }
     // ------------------------------------
@@ -204,7 +261,7 @@ const Index = () => {
         const safeResponse: AIResponse = {
           text: rewriteUnsafe(text),
           isAI: true,
-          isBlocked: true, // Mark as blocked by safety filter
+          isBlocked: true,
           meta: {
             status: "filtered",
             reason: risk.reason,
@@ -212,7 +269,7 @@ const Index = () => {
         };
         setMessages((prev) => [...prev, safeResponse]);
         
-        // Save activity with filtered status and risk data
+        // Manual logging for blocked messages (since askGroq is bypassed)
         saveActivity({
           userText: text,
           aiText: safeResponse.text,
@@ -220,7 +277,6 @@ const Index = () => {
           timestamp: Date.now(),
           status: "filtered",
           risk: risk,
-          sentimentScore: sentiment.score, // Use AI-driven sentiment
         });
         
         setIsLoading(false);
@@ -228,12 +284,16 @@ const Index = () => {
       return;
     }
 
-    // Layer 2: Call Groq API with system prompt for child-safe responses
+    // Layer 2: Call Groq API (now includes global history and logging)
     try {
-      const aiText = await askGroq(text);
+      const aiText = await askGroq(text, intent);
       
       if (aiText) {
-        // Analyze response for transparency
+        // Track recent topics for anti-repetition (simple extraction)
+        if (intent === "joke") addRecentTopic("joke");
+        if (intent === "story") addRecentTopic("story");
+        if (text.length > 3 && text.length < 20) addRecentTopic(text.toLowerCase());
+
         const policy = getPolicy();
         const meta = analyzeResponse(text, aiText, policy);
         
@@ -245,79 +305,13 @@ const Index = () => {
             meta: meta,
           },
         ]);
-        
-        // Save activity with real meta status and risk data (even if safe)
-        saveActivity({
-          userText: text,
-          aiText: aiText,
-          category: getCategory(text),
-          timestamp: Date.now(),
-          status: meta.status,
-          risk: risk,
-          sentimentScore: sentiment.score, // Use AI-driven sentiment
-        });
       } else {
-        // Layer 3: Fallback to mock response if API fails
-        const fallbackText =
-          aiMode === "fun"
-            ? `That's an awesome question! 🎮 Here's a fun way to think about "${text}" — imagine you're a scientist exploring a brand new planet... What would you discover? 🚀`
-            : `Great question about "${text}"! 🤔 Let me help you think about it step by step. What do you already know about this topic? That's always the best place to start! ✨`;
-        
-        // Analyze fallback response too
-        const policy = getPolicy();
-        const meta = analyzeResponse(text, fallbackText, policy);
-        
-        setMessages((prev) => [
-          ...prev,
-          {
-            text: fallbackText,
-            isAI: true,
-            meta: meta,
-          },
-        ]);
-        
-        // Save activity with fallback and risk data
-        saveActivity({
-          userText: text,
-          aiText: fallbackText,
-          category: getCategory(text),
-          timestamp: Date.now(),
-          status: meta.status,
-          risk: risk,
-          sentimentScore: sentiment.score, // Use AI-driven sentiment
-        });
+        // Fallback logic
+        const fallbackText = "I'm having a little trouble thinking right now. Let's try again in a moment! 😊";
+        setMessages((prev) => [...prev, { text: fallbackText, isAI: true }]);
       }
     } catch (error) {
       console.error("[Chat] Error getting AI response:", error);
-      // Layer 3: Fallback to mock response on error
-      const fallbackText =
-        aiMode === "fun"
-          ? `That's an awesome question! 🎮 Here's a fun way to think about "${text}" — imagine you're a scientist exploring a brand new planet... What would you discover? 🚀`
-          : `Great question about "${text}"! 🤔 Let me help you think about it step by step. What do you already know about this topic? That's always the best place to start! ✨`;
-      
-      // Analyze fallback response
-      const policy = getPolicy();
-      const meta = analyzeResponse(text, fallbackText, policy);
-      
-      setMessages((prev) => [
-        ...prev,
-        {
-          text: fallbackText,
-          isAI: true,
-          meta: meta,
-        },
-      ]);
-      
-      // Save activity with fallback and risk data
-      saveActivity({
-        userText: text,
-        aiText: fallbackText,
-        category: getCategory(text),
-        timestamp: Date.now(),
-        status: meta.status,
-        risk: risk,
-        sentimentScore: sentiment.score, // Use AI-driven sentiment
-      });
     } finally {
       setIsLoading(false);
     }

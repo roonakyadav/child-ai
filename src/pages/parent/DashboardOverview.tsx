@@ -31,6 +31,10 @@ import {
 } from "@/lib/activity";
 import { getUsedMinutesToday } from "@/lib/screen-time";
 import { 
+  getAIConfig, 
+  setAIConfig 
+} from "@/lib/policy";
+import { 
   detectRiskyMessage, 
   rewriteUnsafe, 
   analyzeBehaviorPattern, 
@@ -41,6 +45,7 @@ import { setMode, getMode } from "@/lib/intervention/modeService";
 import { injectSystemMessage } from "@/lib/intervention/injectionService";
 import { saveIntervention, getInterventions } from "@/lib/intervention/interventionService";
 import { askParentAssistant } from "@/lib/groq";
+import { getConfig } from "@/lib/configStore";
 
 interface AIInsights {
   keyInsight: string;
@@ -49,6 +54,7 @@ interface AIInsights {
 
 const DashboardOverview = () => {
   const navigate = useNavigate();
+  const config = getConfig();
   
   // State for real-time activity updates
   const [activities, setActivities] = useState(getActivity());
@@ -129,7 +135,7 @@ const DashboardOverview = () => {
 
       setIsGenerating(true);
       try {
-        const response = await fetch("http://localhost:3001/api/insights", {
+        const response = await fetch(`${config.api.baseUrl}${config.api.insights}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ summary }),
@@ -165,18 +171,20 @@ const DashboardOverview = () => {
     let lowEngagement = 0;
     let emotional = 0;
     
+    const moodConfig = config.behavior;
+
     for (let i = 0; i < recentMessages.length; i++) {
       const text = recentMessages[i].userText.toLowerCase();
-      if (text.includes("ok") || text.includes("yes") || text.includes("k")) {
+      if (moodConfig.moodKeywords.lowEngagement.some(k => text.includes(k))) {
         lowEngagement++;
       }
-      if (text.includes("sad") || text.includes("angry") || text.includes("bored")) {
+      if (moodConfig.moodKeywords.emotional.some(k => text.includes(k))) {
         emotional++;
       }
     }
     
-    if (lowEngagement > 3) mood = "Low Engagement 😐";
-    else if (emotional > 2) mood = "Emotional 😟";
+    if (lowEngagement >= moodConfig.moodThresholds.lowEngagement) mood = "Low Engagement 😐";
+    else if (emotional >= moodConfig.moodThresholds.emotional) mood = "Emotional 😟";
   }
 
   // State for AI explanation
@@ -333,7 +341,28 @@ const DashboardOverview = () => {
       localStorage.setItem("parent_policies", JSON.stringify(updatedPolicies));
     }
     
-    // 2. Save to actions for AI system prompt injection
+    // 2. Save to AI Behavior Config for real prompt injection
+    try {
+      const config = getAIConfig();
+      const currentInstructions = config.customInstructions || "";
+      
+      // Prevent duplicates in customInstructions
+      if (!currentInstructions.includes(insight)) {
+        const newInstructions = currentInstructions 
+          ? `${currentInstructions.trim()}\n- ${insight}` 
+          : `- ${insight}`;
+        
+        const newConfig = {
+          ...config,
+          customInstructions: newInstructions
+        };
+        setAIConfig(newConfig);
+      }
+    } catch (error) {
+      console.error("[Dashboard] Error updating AI config from insight:", error);
+    }
+
+    // 3. Save to actions for tracking
     const actionType = getActionType(insight);
     const existingActions = JSON.parse(localStorage.getItem("parent_actions") || "[]");
     
@@ -404,7 +433,7 @@ const DashboardOverview = () => {
           .map(a => a.userText);
       }
 
-      const response = await fetch("http://localhost:3001/api/deep-analysis", {
+      const response = await fetch(`${config.api.baseUrl}${config.api.deepAnalysis}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -432,6 +461,28 @@ const DashboardOverview = () => {
       console.error("[Dashboard] Error explaining insight:", error);
     }
   }
+
+  // Helper to get color classes based on score
+  const getMetricColor = (score: number) => {
+    if (score >= 70) return {
+      bg: "bg-primary/10",
+      text: "text-primary",
+      bar: "gradient-hero",
+      iconBg: "bg-primary/20"
+    };
+    if (score >= 40) return {
+      bg: "bg-orange-100",
+      text: "text-orange-600",
+      bar: "bg-orange-500",
+      iconBg: "bg-orange-200"
+    };
+    return {
+      bg: "bg-destructive/10",
+      text: "text-destructive",
+      bar: "bg-destructive",
+      iconBg: "bg-destructive/20"
+    };
+  };
 
   return (
     <div className="space-y-6">
@@ -982,76 +1033,91 @@ const DashboardOverview = () => {
             <div className="grid gap-10 lg:grid-cols-2">
               <div className="space-y-8 py-4">
                 {/* Curiosity */}
-                <div className="rounded-3xl bg-background p-6 hover:shadow-soft transition-all group">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 flex items-center justify-center rounded-xl bg-primary/20 text-primary group-hover:scale-110 transition-transform">
-                        <Brain className="h-4 w-4" />
+                {(() => {
+                  const colors = getMetricColor(intelligence.curiosity);
+                  return (
+                    <div className="rounded-3xl bg-background p-6 hover:shadow-soft transition-all group">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-8 w-8 flex items-center justify-center rounded-xl ${colors.iconBg} ${colors.text} group-hover:scale-110 transition-transform`}>
+                            <Brain className="h-4 w-4" />
+                          </div>
+                          <span className="text-sm font-black text-foreground">Curiosity level</span>
+                        </div>
+                        <span className={`text-sm font-black ${colors.text}`}>{intelligence.curiosity}%</span>
                       </div>
-                      <span className="text-sm font-black text-foreground">Curiosity level</span>
+                      <div className="h-3 overflow-hidden rounded-full bg-muted shadow-inner">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${intelligence.curiosity}%` }}
+                          transition={{ duration: 1, delay: 0.7 }}
+                          className={`h-full rounded-full ${colors.bar}`}
+                        />
+                      </div>
+                      <p className="mt-3 text-[11px] font-medium text-muted-foreground leading-relaxed">
+                        {intelligence.reasoning.curiosity}
+                      </p>
                     </div>
-                    <span className="text-sm font-black text-primary">{intelligence.curiosity}%</span>
-                  </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-muted shadow-inner">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${intelligence.curiosity}%` }}
-                      transition={{ duration: 1, delay: 0.7 }}
-                      className="h-full rounded-full gradient-hero"
-                    />
-                  </div>
-                  <p className="mt-3 text-[11px] font-medium text-muted-foreground leading-relaxed">
-                    {intelligence.reasoning.curiosity}
-                  </p>
-                </div>
+                  );
+                })()}
 
                 {/* Math Confidence */}
-                <div className="rounded-3xl bg-background p-6 hover:shadow-soft transition-all group">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 flex items-center justify-center rounded-xl bg-secondary/20 text-secondary group-hover:scale-110 transition-transform">
-                        <BookOpen className="h-4 w-4" />
+                {(() => {
+                  const colors = getMetricColor(intelligence.mathConfidence);
+                  return (
+                    <div className="rounded-3xl bg-background p-6 hover:shadow-soft transition-all group">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-8 w-8 flex items-center justify-center rounded-xl ${colors.iconBg} ${colors.text} group-hover:scale-110 transition-transform`}>
+                            <BookOpen className="h-4 w-4" />
+                          </div>
+                          <span className="text-sm font-black text-foreground">Math confidence</span>
+                        </div>
+                        <span className={`text-sm font-black ${colors.text}`}>{intelligence.mathConfidence}%</span>
                       </div>
-                      <span className="text-sm font-black text-foreground">Math confidence</span>
+                      <div className="h-3 overflow-hidden rounded-full bg-muted shadow-inner">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${intelligence.mathConfidence}%` }}
+                          transition={{ duration: 1, delay: 0.8 }}
+                          className={`h-full rounded-full ${colors.bar}`}
+                        />
+                      </div>
+                      <p className="mt-3 text-[11px] font-medium text-muted-foreground leading-relaxed">
+                        {intelligence.reasoning.mathConfidence}
+                      </p>
                     </div>
-                    <span className="text-sm font-black text-secondary">{intelligence.mathConfidence}%</span>
-                  </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-muted shadow-inner">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${intelligence.mathConfidence}%` }}
-                      transition={{ duration: 1, delay: 0.8 }}
-                      className="h-full rounded-full bg-secondary"
-                    />
-                  </div>
-                  <p className="mt-3 text-[11px] font-medium text-muted-foreground leading-relaxed">
-                    {intelligence.reasoning.mathConfidence}
-                  </p>
-                </div>
+                  );
+                })()}
 
                 {/* Attention */}
-                <div className="rounded-3xl bg-background p-6 hover:shadow-soft transition-all group">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 flex items-center justify-center rounded-xl bg-accent/20 text-accent-foreground group-hover:scale-110 transition-transform">
-                        <Timer className="h-4 w-4" />
+                {(() => {
+                  const colors = getMetricColor(intelligence.attentionSpan);
+                  return (
+                    <div className="rounded-3xl bg-background p-6 hover:shadow-soft transition-all group">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-8 w-8 flex items-center justify-center rounded-xl ${colors.iconBg} ${colors.text} group-hover:scale-110 transition-transform`}>
+                            <Timer className="h-4 w-4" />
+                          </div>
+                          <span className="text-sm font-black text-foreground">Attention span</span>
+                        </div>
+                        <span className={`text-sm font-black ${colors.text}`}>{intelligence.attentionSpan}%</span>
                       </div>
-                      <span className="text-sm font-black text-foreground">Attention span</span>
+                      <div className="h-3 overflow-hidden rounded-full bg-muted shadow-inner">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${intelligence.attentionSpan}%` }}
+                          transition={{ duration: 1, delay: 0.9 }}
+                          className={`h-full rounded-full ${colors.bar}`}
+                        />
+                      </div>
+                      <p className="mt-3 text-[11px] font-medium text-muted-foreground leading-relaxed">
+                        {intelligence.reasoning.attentionSpan}
+                      </p>
                     </div>
-                    <span className="text-sm font-black text-accent-foreground">{intelligence.attentionSpan}%</span>
-                  </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-muted shadow-inner">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${intelligence.attentionSpan}%` }}
-                      transition={{ duration: 1, delay: 0.9 }}
-                      className="h-full rounded-full bg-accent"
-                    />
-                  </div>
-                  <p className="mt-3 text-[11px] font-medium text-muted-foreground leading-relaxed">
-                    {intelligence.reasoning.attentionSpan}
-                  </p>
-                </div>
+                  );
+                })()}
               </div>
 
               <div className="flex flex-col justify-start space-y-6">
@@ -1064,7 +1130,7 @@ const DashboardOverview = () => {
                     {/* 1. Growth Summary */}
                     <div>
                       <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-[18px] bg-white shadow-soft">
-                        <Target className="h-6 w-6 text-primary" />
+                        <Target className={`h-6 w-6 ${getMetricColor(intelligence.hybridScore).text}`} />
                       </div>
                       <div className="flex items-center justify-between">
                         <h3 className="text-xl font-black text-foreground tracking-tight">Growth summary</h3>
@@ -1075,7 +1141,7 @@ const DashboardOverview = () => {
                         )}
                       </div>
                       <div className="mt-2 flex items-baseline gap-2">
-                        <span className="text-3xl font-black text-primary">{intelligence.hybridScore}%</span>
+                        <span className={`text-3xl font-black ${getMetricColor(intelligence.hybridScore).text}`}>{intelligence.hybridScore}%</span>
                         {intelligence.previousScore !== undefined && (
                           <span className={`text-xs font-bold uppercase tracking-widest ${
                             intelligence.hybridScore >= intelligence.previousScore ? 'text-mint' : 'text-destructive'
@@ -1099,18 +1165,21 @@ const DashboardOverview = () => {
                     </div>
 
                     {/* 2.5 Focus Area (New) */}
-                    {intelligence.decisionEngine?.focusArea && (
-                      <div className="rounded-3xl bg-destructive/5 p-5 border border-destructive/10">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Target className="h-4 w-4 text-destructive" />
-                          <span className="text-[10px] font-black text-destructive uppercase tracking-widest">Needs Attention</span>
+                    {intelligence.decisionEngine?.focusArea && (() => {
+                      const colors = getMetricColor(intelligence.decisionEngine.focusArea.value);
+                      return (
+                        <div className={`rounded-3xl ${colors.bg} p-5 border ${colors.bar.includes('gradient') ? 'border-primary/20' : `border-${colors.bar}/20`}`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Target className={`h-4 w-4 ${colors.text}`} />
+                            <span className={`text-[10px] font-black ${colors.text} uppercase tracking-widest`}>Needs Attention</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-bold text-foreground">{intelligence.decisionEngine.focusArea.metric}</span>
+                            <span className={`text-sm font-black ${colors.text}`}>{intelligence.decisionEngine.focusArea.value}%</span>
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-foreground">{intelligence.decisionEngine.focusArea.metric}</span>
-                          <span className="text-sm font-black text-destructive">{intelligence.decisionEngine.focusArea.value}%</span>
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* 3. Progress Trend */}
                     <div className="space-y-3">

@@ -5,8 +5,10 @@
  * Handles secure PIN storage using simple hashing and session management.
  */
 
+import { getConfig } from "./configStore";
+
 const PIN_STORAGE_KEY = "parent_pin_hash";
-const DEFAULT_PIN = "1234"; // Default for initial setup
+const DEFAULT_PIN = getConfig().auth.defaultPin; // Default for initial setup
 
 /**
  * Simple hashing function for the 4-digit PIN

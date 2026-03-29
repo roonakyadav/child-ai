@@ -1,14 +1,98 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { KeyRound, Trash2, ShieldCheck, Bell } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { KeyRound, Trash2, ShieldCheck, Bell, FileDown, Loader2, Sparkles, CheckCircle } from "lucide-react";
 import { isStrictModeEnabled, setStrictMode as saveStrictMode, updatePin } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { gatherAllAppData, generatePDFReport, ReportData } from "@/lib/reportService";
+import { getConfig } from "@/lib/configStore";
 
 const ParentSettings = () => {
+  const config = getConfig();
   const [strictMode, setStrictMode] = useState(isStrictModeEnabled());
   const [notifications, setNotifications] = useState(true);
   const [showPinChange, setShowPinChange] = useState(false);
   const [newPin, setNewPin] = useState("");
   const [pinSaved, setPinSaved] = useState(false);
+
+  // Report states
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState("");
+
+  const handleDownloadReport = async () => {
+    const data = gatherAllAppData();
+    
+    // Check if there is enough data to generate a report
+    const hasActivities = Array.isArray(data.activities) && data.activities.length > 0;
+    const hasAlerts = Array.isArray(data.alerts) && data.alerts.length > 0;
+    const hasIntelligence = data.intelligence && Object.keys(data.intelligence).length > 0;
+
+    if (!hasActivities && !hasAlerts && !hasIntelligence) {
+      alert("No data available to generate a report. Please interact with the AI assistant first!");
+      return;
+    }
+
+    setIsGenerating(true);
+    setProgress(5);
+    setStatus("Gathering all conversation and safety data...");
+    
+    try {
+      console.log("Sending data:", data);
+      setProgress(15);
+      
+      setStatus("AI is analyzing 4 pages of developmental patterns...");
+      const response = await fetch(`${config.api.baseUrl}${config.api.fullReport}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          allData: data 
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Report generation failed: ${errorText}`);
+      }
+      
+      const reportData: ReportData = await response.json();
+      
+      // If we are in the "test success" phase, reportData might just be {success: true}
+      // So we handle that gracefully
+      if ((reportData as any).success && !(reportData as any).sections) {
+        setStatus("Test route verified! Restoring AI logic...");
+        setTimeout(() => {
+          setIsGenerating(false);
+          setProgress(0);
+        }, 2000);
+        return;
+      }
+
+      setProgress(40);
+      setStatus("Generating high-resolution PDF structure...");
+
+      await generatePDFReport(reportData, (p) => {
+        setProgress(40 + (p * 0.6));
+        if (p < 30) setStatus("Formatting Executive Summary...");
+        else if (p < 60) setStatus("Analyzing Behavioral Trends...");
+        else if (p < 90) setStatus("Structuring Strategic Recommendations...");
+        else setStatus("Finalizing PDF export...");
+      });
+
+      setStatus("Report downloaded successfully!");
+      setTimeout(() => {
+        setIsGenerating(false);
+        setProgress(0);
+        setStatus("");
+      }, 3000);
+
+    } catch (error) {
+      console.error("[Report] Generation error:", error);
+      setStatus(`Error: ${error instanceof Error ? error.message : 'Could not generate report'}. Please try again.`);
+      setTimeout(() => setIsGenerating(false), 5000);
+    }
+  };
 
   const handleToggleStrictMode = () => {
     const newState = !strictMode;
@@ -18,7 +102,7 @@ const ParentSettings = () => {
 
   const handleSavePin = async () => {
     if (newPin.length === 4) {
-      await updatePin(newPin);
+      updatePin(newPin);
       setPinSaved(true);
       setTimeout(() => {
         setShowPinChange(false);
@@ -133,6 +217,78 @@ const ParentSettings = () => {
           </motion.button>
         ))}
       </div>
+
+      {/* Full Report Download Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="rounded-[32px] bg-white p-8 shadow-card border border-primary/5 relative overflow-hidden"
+      >
+        <div className="absolute top-0 right-0 p-8 opacity-5">
+          <Sparkles className="h-32 w-32 text-primary" />
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 flex items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <FileDown className="h-5 w-5" />
+              </div>
+              <h3 className="text-xl font-black text-foreground tracking-tight uppercase tracking-widest text-xs">Deep Analytics</h3>
+            </div>
+            <h2 className="text-2xl font-black text-foreground">Download Full Development Report</h2>
+            <p className="text-sm text-muted-foreground max-w-md">
+              Generate a comprehensive 4-page PDF analysis of your child's behavior, 
+              learning milestones, and safety trends powered by advanced AI.
+            </p>
+          </div>
+
+          <div className="shrink-0">
+            <Button 
+              onClick={handleDownloadReport} 
+              disabled={isGenerating}
+              className="h-16 px-10 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest text-xs gap-3 shadow-soft group"
+            >
+              {isGenerating ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <FileDown className="h-5 w-5 group-hover:translate-y-0.5 transition-transform" />
+              )}
+              {isGenerating ? "Generating Report..." : "Download Report"}
+            </Button>
+          </div>
+        </div>
+
+        <AnimatePresence>
+          {isGenerating && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-8 pt-6 border-t border-primary/5"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-2">
+                  {progress < 100 ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3 text-mint" />}
+                  {status}
+                </span>
+                <span className="text-[10px] font-black text-primary">{Math.round(progress)}%</span>
+              </div>
+              <div className="h-2 w-full bg-primary/5 rounded-full overflow-hidden p-0.5 border border-primary/10">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  className="h-full rounded-full bg-primary"
+                />
+              </div>
+              <p className="mt-4 text-[11px] text-muted-foreground italic text-center">
+                This process involves analyzing interaction data. Please stay on this page.
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
       {/* PIN Change Modal */}
       {showPinChange && (

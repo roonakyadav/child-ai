@@ -93,6 +93,9 @@ const UsageAnalytics = () => {
   const totalMinutes = Object.values(dailyMinutes).reduce((sum, val) => sum + val, 0);
   const avgMinutes = Math.round(totalMinutes / 7);
 
+  // Calculate number of active days
+  const activeDays = Object.values(dailyMinutes).filter(min => min > 0).length;
+
   // Prepare chart data
   const dailyChartData = Object.entries(dailyMinutes).map(([day, minutes]) => ({
     day,
@@ -128,6 +131,18 @@ const UsageAnalytics = () => {
     .map(([week, count]) => ({ week, count }))
     .reverse();
 
+  // Single Source of Truth for Analytics Data
+  const analyticsData = {
+    totalInteractions: activities.length,
+    activeDays: Object.values(dailyMinutes).filter(min => min > 0).length,
+    sessions: activities.length,
+    peakDay: peakDay || "N/A",
+    peakTime: peakTimeRange || "N/A",
+    avgDailyUse: avgMinutes,
+    activityLevel: intelligence?.activityLevel || (activities.length > 20 ? "High" : activities.length > 5 ? "Medium" : "Low"),
+    consistencyLevel: intelligence?.consistencyLevel || (Object.values(dailyMinutes).filter(min => min > 0).length > 3 ? "High" : Object.values(dailyMinutes).filter(min => min > 0).length > 1 ? "Medium" : "Low")
+  };
+
   return (
     <div className="space-y-8">
       {/* 1. Header with Intelligence Status */}
@@ -144,13 +159,13 @@ const UsageAnalytics = () => {
             className={`px-6 py-3 rounded-2xl border flex items-center gap-3 ${
               intelligence.status === "High Engagement" ? "bg-mint/10 border-mint/20 text-mint" :
               intelligence.status === "Moderate Engagement" ? "bg-primary/10 border-primary/20 text-primary" :
-              "bg-orange-500/10 border-orange-500/20 text-orange-600"
+              "bg-secondary/10 border-secondary/20 text-secondary"
             }`}
           >
             <div className={`h-3 w-3 rounded-full animate-pulse ${
               intelligence.status === "High Engagement" ? "bg-mint" :
               intelligence.status === "Moderate Engagement" ? "bg-primary" :
-              "bg-orange-500"
+              "bg-secondary"
             }`} />
             <span className="text-sm font-black uppercase tracking-widest">{intelligence.status}</span>
           </motion.div>
@@ -170,25 +185,72 @@ const UsageAnalytics = () => {
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-[40px] bg-white p-8 border border-white shadow-soft space-y-8"
+              className="rounded-[40px] bg-white p-8 border border-white shadow-soft space-y-6"
             >
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Activity className="h-4 w-4 text-primary" />
-                  <span className="text-[10px] font-black text-primary uppercase tracking-widest">Behavior Pattern</span>
+              <div className="space-y-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Activity className="h-4 w-4 text-primary" />
+                    <span className="text-[10px] font-black text-primary uppercase tracking-widest">Behavior Pattern</span>
+                  </div>
+                  <h3 className="text-xl font-black text-foreground leading-tight">
+                    {(analyticsData.activityLevel === "High" && analyticsData.activeDays === 1) 
+                      ? "High activity in a single session" 
+                      : (!intelligence?.behaviorPattern || intelligence.behaviorPattern.trim() === "") 
+                        ? "Analyzing Behavior..." 
+                        : intelligence.behaviorPattern}
+                  </h3>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
+                    Consistency is still developing
+                  </p>
+                  <p className="text-sm font-medium text-muted-foreground mt-4">
+                    {(!intelligence?.statusReason || intelligence.statusReason.trim() === "")
+                      ? "We are gathering more data to provide a detailed analysis of the usage patterns."
+                      : intelligence.statusReason}
+                  </p>
                 </div>
-                <h3 className="text-xl font-black text-foreground leading-tight">{intelligence?.behaviorPattern}</h3>
-                <p className="text-sm font-medium text-muted-foreground mt-2">{intelligence?.statusReason}</p>
-              </div>
 
-              <div className="pt-6 border-t border-muted">
-                <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Trend Explanation</span>
+                {/* Dual Metrics Display */}
+                <div className="flex gap-4 pt-2">
+                  <div className="flex-1 rounded-2xl bg-primary/5 p-4 border border-primary/10">
+                    <p className="text-[10px] font-black text-primary/60 uppercase tracking-widest mb-1">Activity Level</p>
+                    <p className={`text-sm font-black ${
+                      analyticsData.activityLevel === 'High' ? 'text-primary' : 
+                      analyticsData.activityLevel === 'Medium' ? 'text-orange-500' : 'text-muted-foreground'
+                    }`}>
+                      {analyticsData.activityLevel}
+                    </p>
+                  </div>
+                  <div className="flex-1 rounded-2xl bg-secondary/5 p-4 border border-secondary/10">
+                    <p className="text-[10px] font-black text-secondary/60 uppercase tracking-widest mb-1">Consistency</p>
+                    <p className={`text-sm font-black ${
+                      analyticsData.consistencyLevel === 'High' ? 'text-secondary' : 
+                      analyticsData.consistencyLevel === 'Medium' ? 'text-orange-500' : 'text-muted-foreground'
+                    }`}>
+                      {analyticsData.consistencyLevel}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-sm font-bold text-foreground/80 italic leading-relaxed bg-muted/30 p-4 rounded-2xl border border-muted/50">
-                  "{intelligence?.trendExplanation}"
-                </p>
+
+                <div className="pt-6 border-t border-muted">
+                  <div className="flex items-center gap-2 mb-4">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Trend Explanation</span>
+                  </div>
+                  <p className="text-sm font-bold text-foreground/80 italic leading-relaxed bg-muted/30 p-4 rounded-2xl border border-muted/50">
+                    "{analyticsData.activeDays === 1 
+                      ? `All ${analyticsData.totalInteractions} interactions happened on a single day. No activity was recorded on other days.`
+                      : analyticsData.activeDays > 1
+                        ? `Activity is spread across ${analyticsData.activeDays} days this week, showing emerging patterns.`
+                        : "Not enough data to determine usage patterns."}"
+                  </p>
+                  {analyticsData.activityLevel === "High" && (
+                    <p className="mt-4 text-[11px] font-black text-mint uppercase tracking-widest flex items-center gap-2">
+                      <Zap className="h-3 w-3" />
+                      The child was highly engaged during this session.
+                    </p>
+                  )}
+                </div>
               </div>
             </motion.div>
 
@@ -205,12 +267,45 @@ const UsageAnalytics = () => {
                   <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Key Engagement Problems</span>
                 </div>
                 <div className="space-y-3">
-                  {intelligence?.problems.map((problem, i) => (
-                    <div key={i} className="flex items-start gap-3 p-3 rounded-2xl bg-white/60 border border-white shadow-sm">
-                      <div className="h-2 w-2 rounded-full bg-orange-500 mt-1.5" />
-                      <span className="text-sm font-bold text-foreground/80">{problem}</span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const insights: { text: string; label?: string }[] = [];
+                    
+                    // 1. Primary Insight (Always first)
+                    insights.push({ 
+                      text: `${analyticsData.activeDays} active day(s) this week (Target: 4+)`,
+                      label: analyticsData.activeDays < 4 ? "Consistency Issue" : undefined
+                    });
+
+                    // 2. Secondary Insight (Conditional)
+                    if (analyticsData.activeDays === 1) {
+                      insights.push({ text: "Activity is currently limited to a single day." });
+                    } else if (intelligence?.problems && intelligence.problems.length > 0) {
+                      // Add first problem from intelligence if it's not a duplicate of activeDays info
+                      const firstProblem = intelligence.problems[0];
+                      const isDuplicate = firstProblem.toLowerCase().includes("day") || 
+                                        firstProblem.toLowerCase().includes("active") ||
+                                        firstProblem.toLowerCase().includes("consistency");
+                      
+                      if (!isDuplicate) {
+                        insights.push({ text: firstProblem });
+                      }
+                    }
+
+                    // Render max 2 insights
+                    return insights.slice(0, 2).map((insight, i) => (
+                      <div key={i} className={`flex items-start gap-3 p-3 rounded-2xl border border-white shadow-sm ${i === 0 ? "bg-white/80" : "bg-white/40"}`}>
+                        <div className={`h-2 w-2 rounded-full mt-1.5 ${i === 0 ? "bg-orange-500" : "bg-orange-400/60"}`} />
+                        <div className="flex flex-col gap-1">
+                          {insight.label && (
+                            <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">{insight.label}</span>
+                          )}
+                          <span className={`${i === 0 ? "text-sm font-black text-foreground" : "text-sm font-bold text-foreground/70"}`}>
+                            {insight.text}
+                          </span>
+                        </div>
+                      </div>
+                    ));
+                  })()}
                 </div>
               </div>
 
@@ -226,7 +321,16 @@ const UsageAnalytics = () => {
                     <Zap className="h-10 w-10 text-primary" />
                   </div>
                   <p className="text-sm font-bold text-primary leading-relaxed relative z-10">
-                    {intelligence?.actionRecommendation}
+                    {(() => {
+                      const hasRecommendation = intelligence?.actionRecommendation && intelligence.actionRecommendation.trim() !== "";
+                      if (analyticsData.activityLevel === "High" && analyticsData.consistencyLevel === "Low") {
+                        return `The child was highly engaged during the last session. Encourage a short session tomorrow around ${analyticsData.peakTime} to start building a daily habit.`;
+                      }
+                      if (analyticsData.activityLevel === "Low") {
+                        return "The child has low interaction levels. Encourage a short, engaging session to increase usage.";
+                      }
+                      return hasRecommendation ? intelligence.actionRecommendation : "Encourage consistent daily usage to build a habit.";
+                    })()}
                   </p>
                 </div>
               </div>
@@ -251,7 +355,7 @@ const UsageAnalytics = () => {
                   <TrendingUp className="h-5 w-5" />
                 </div>
               </div>
-              <div className="h-[250px] w-full">
+              <div className={activeDays <= 1 ? "h-[350px] w-full" : "h-[250px] w-full"}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={trendData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
@@ -300,7 +404,7 @@ const UsageAnalytics = () => {
                   <Calendar className="h-4 w-4 text-primary" />
                   <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Peak Day</span>
                 </div>
-                <p className="text-2xl font-black text-foreground">{peakDay || "N/A"}</p>
+                <p className="text-2xl font-black text-foreground">{analyticsData.peakDay}</p>
               </div>
 
               <div className="rounded-3xl bg-white p-6 border border-white shadow-soft group hover:scale-[1.02] transition-transform">
@@ -308,7 +412,7 @@ const UsageAnalytics = () => {
                   <Clock className="h-4 w-4 text-secondary" />
                   <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Peak Time</span>
                 </div>
-                <p className="text-2xl font-black text-foreground">{peakTimeRange}</p>
+                <p className="text-2xl font-black text-foreground">{analyticsData.peakTime}</p>
               </div>
 
               <div className="rounded-3xl bg-white p-6 border border-white shadow-soft group hover:scale-[1.02] transition-transform">
@@ -316,62 +420,64 @@ const UsageAnalytics = () => {
                   <Zap className="h-4 w-4 text-mint" />
                   <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Avg Daily Use</span>
                 </div>
-                <p className="text-2xl font-black text-foreground">{avgMinutes} min</p>
+                <p className="text-2xl font-black text-foreground">{analyticsData.avgDailyUse} min</p>
               </div>
             </motion.div>
           </div>
 
           {/* 4. Daily Breakdown Chart */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="rounded-[40px] bg-white p-8 border border-white shadow-soft"
-          >
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h3 className="text-lg font-black text-foreground tracking-tight">Daily Interaction Breakdown</h3>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Usage minutes across the week</p>
+          {activeDays > 1 && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="rounded-[40px] bg-white p-8 border border-white shadow-soft"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-lg font-black text-foreground tracking-tight">Daily Interaction Breakdown</h3>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Usage minutes across the week</p>
+                </div>
+                <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-mint/10 text-mint">
+                  <Calendar className="h-5 w-5" />
+                </div>
               </div>
-              <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-mint/10 text-mint">
-                <Calendar className="h-5 w-5" />
+              <div className="h-[200px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dailyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                    <XAxis 
+                      dataKey="day" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 10, fontWeight: 700, fill: "#94a3b8" }}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 10, fontWeight: 700, fill: "#94a3b8" }}
+                    />
+                    <Tooltip 
+                      cursor={{ fill: '#f8fafc' }}
+                      contentStyle={{ 
+                        borderRadius: "16px", 
+                        border: "none", 
+                        boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
+                        fontSize: "12px",
+                        fontWeight: "700"
+                      }} 
+                    />
+                    <Bar 
+                      dataKey="minutes" 
+                      fill="#10B981" 
+                      radius={[8, 8, 8, 8]} 
+                      barSize={40}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            </div>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                  <XAxis 
-                    dataKey="day" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fontWeight: 700, fill: "#94a3b8" }}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fontWeight: 700, fill: "#94a3b8" }}
-                  />
-                  <Tooltip 
-                    cursor={{ fill: '#f8fafc' }}
-                    contentStyle={{ 
-                      borderRadius: "16px", 
-                      border: "none", 
-                      boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
-                      fontSize: "12px",
-                      fontWeight: "700"
-                    }} 
-                  />
-                  <Bar 
-                    dataKey="minutes" 
-                    fill="#10B981" 
-                    radius={[8, 8, 8, 8]} 
-                    barSize={40}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </motion.div>
+            </motion.div>
+          )}
         </div>
       )}
     </div>

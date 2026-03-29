@@ -1,12 +1,14 @@
 import { Activity, Session } from "./types";
-
-const SESSION_GAP_MS = 30 * 60 * 1000; // 30 minutes inactivity
+import { getConfig } from "../configStore";
 
 /**
  * Group raw activity data into sessions based on time gaps.
  */
 export function groupIntoSessions(activities: Activity[]): Session[] {
   if (activities.length === 0) return [];
+
+  const config = getConfig();
+  const SESSION_GAP_MS = config.intelligence.sessionGapMs;
 
   // Sort activities by timestamp ascending
   const sorted = [...activities].sort((a, b) => a.timestamp - b.timestamp);

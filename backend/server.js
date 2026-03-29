@@ -2,6 +2,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 
 const app = express();
 const PORT = 3001;
@@ -14,6 +15,11 @@ const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 // --- API Endpoints ---
 
+// 0. Test Endpoint
+app.get('/api/test', (req, res) => {
+  res.send("API WORKING");
+});
+
 // 1. Chat Endpoint
 app.post('/api/chat', async (req, res) => {
   const { messages, model } = req.body;
@@ -23,29 +29,20 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
+    const response = await axios.post(GROQ_API_URL, {
+      model: model || "llama-3.1-8b-instant",
+      messages,
+    }, {
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: model || "llama-3.1-8b-instant",
-        messages,
-      }),
+      }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Chat] Groq API Error:`, errorText);
-      return res.status(response.status).json({ error: 'AI provider error' });
-    }
-
-    const data = await response.json();
-    res.status(200).json(data);
+    res.status(200).json(response.data);
   } catch (error) {
-    console.error("[Chat] Server error:", error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("[Chat] Server error:", error.response?.data || error.message);
+    res.status(500).json({ error: 'AI provider error' });
   }
 });
 
@@ -82,44 +79,27 @@ app.post('/api/insights', async (req, res) => {
   `;
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
+    const response = await axios.post(GROQ_API_URL, {
+      model: "llama-3.1-8b-instant",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Analyze the following child activity summary and provide behavioral insights:\n${JSON.stringify(summary)}` }
+      ],
+      temperature: 0.4,
+      response_format: { type: "json_object" }
+    }, {
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Analyze the following child activity summary and provide behavioral insights:\n${JSON.stringify(summary)}` }
-        ],
-        temperature: 0.4,
-        response_format: { type: "json_object" }
-      }),
+      }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Insights] Groq API Error:`, errorText);
-      // Return safe fallback instead of error
-      return res.status(200).json({
-        keyInsight: "Unable to analyze learning patterns right now.",
-        smartInsights: [
-          "Try again in a moment.",
-          "Make sure there is enough recent activity to analyze."
-        ]
-      });
-    }
-
-    const data = await response.json();
-    const rawContent = data?.choices?.[0]?.message?.content;
-
+    const rawContent = response.data?.choices?.[0]?.message?.content;
     if (!rawContent) throw new Error("Empty AI response");
 
     res.status(200).json(JSON.parse(rawContent));
   } catch (error) {
-    console.error("[Insights] Server error:", error);
+    console.error("[Insights] Server error:", error.response?.data || error.message);
     res.status(200).json({
       keyInsight: "Unable to analyze learning patterns right now.",
       smartInsights: [
@@ -222,37 +202,27 @@ app.post('/api/deep-analysis', async (req, res) => {
   }
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
+    const response = await axios.post(GROQ_API_URL, {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Perform a deep ${insightType} analysis of this insight: "${insight}"` }
+      ],
+      temperature: 0.2,
+      response_format: { type: "json_object" }
+    }, {
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Perform a deep ${insightType} analysis of this insight: "${insight}"` }
-        ],
-        temperature: 0.2,
-        response_format: { type: "json_object" }
-      }),
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error(`[Deep Analysis] Groq API Error:`, errorData);
-      throw new Error(`Groq API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    
+    const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Deep Analysis] Server error:", error);
+    console.error("[Deep Analysis] Server error:", error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to perform deep analysis' });
   }
 });
@@ -310,37 +280,27 @@ app.post('/api/analyze-intelligence', async (req, res) => {
   `;
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
+    const response = await axios.post(GROQ_API_URL, {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: "Analyze the child's behavior from the provided history." }
+      ],
+      temperature: 0.3,
+      response_format: { type: "json_object" }
+    }, {
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile", // Using 2nd key for intelligence
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: "Analyze the child's behavior from the provided history." }
-        ],
-        temperature: 0.3,
-        response_format: { type: "json_object" }
-      }),
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error(`[Intelligence Analysis] Groq API Error:`, errorData);
-      throw new Error(`Groq API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    
+    const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Intelligence Analysis] Server error:", error);
+    console.error("[Intelligence Analysis] Server error:", error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to perform intelligence analysis' });
   }
 });
@@ -381,37 +341,27 @@ app.post('/api/detect-risk', async (req, res) => {
   `;
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
+    const response = await axios.post(GROQ_API_URL, {
+      model: "llama-3.1-8b-instant",
+      messages: [
+        { role: "system", content: systemPrompt.replace("{message}", message) },
+        { role: "user", content: "Analyze the safety risk of this message." }
+      ],
+      temperature: 0.1,
+      response_format: { type: "json_object" }
+    }, {
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant", // Use 8b for speed on per-message checks
-        messages: [
-          { role: "system", content: systemPrompt.replace("{message}", message) },
-          { role: "user", content: "Analyze the safety risk of this message." }
-        ],
-        temperature: 0.1, // High deterministic for safety
-        response_format: { type: "json_object" }
-      }),
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error(`[Risk Detection] Groq API Error:`, errorData);
-      throw new Error(`Groq API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    
+    const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Risk Detection] Server error:", error);
+    console.error("[Risk Detection] Server error:", error.response?.data || error.message);
     // Safe default if API fails
     res.status(200).json({
       is_flagged: false,
@@ -464,37 +414,27 @@ app.post('/api/analyze-pattern', async (req, res) => {
   `;
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
+    const response = await axios.post(GROQ_API_URL, {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: "Analyze the behavior pattern in this message sequence." }
+      ],
+      temperature: 0.2,
+      response_format: { type: "json_object" }
+    }, {
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile", // Use 70b for better reasoning on patterns
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: "Analyze the behavior pattern in this message sequence." }
-        ],
-        temperature: 0.2,
-        response_format: { type: "json_object" }
-      }),
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error(`[Pattern Analysis] Groq API Error:`, errorData);
-      throw new Error(`Groq API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    
+    const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Pattern Analysis] Server error:", error);
+    console.error("[Pattern Analysis] Server error:", error.response?.data || error.message);
     res.status(200).json({
       pattern_detected: false,
       pattern_type: "none",
@@ -558,35 +498,27 @@ app.post('/api/decision-engine', async (req, res) => {
   `;
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
+    const response = await axios.post(GROQ_API_URL, {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: "Analyze metrics and provide high-confidence insights." }
+      ],
+      temperature: 0.1,
+      response_format: { type: "json_object" }
+    }, {
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: "Analyze metrics and provide high-confidence insights." }
-        ],
-        temperature: 0.1, // High deterministic for precision
-        response_format: { type: "json_object" }
-      }),
+      }
     });
 
-    if (!response.ok) {
-      throw new Error(`Decision Engine API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    
+    const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Decision Engine] Server error:", error);
+    console.error("[Decision Engine] Server error:", error.response?.data || error.message);
     res.status(200).json({
       topInsight: `Curiosity score is ${metrics.curiosity}%, demonstrating steady exploration.`,
       focusArea: { metric: "Attention Span", value: metrics.attentionSpan },
@@ -608,16 +540,26 @@ app.post('/api/analyze-engagement', async (req, res) => {
 
   const systemPrompt = `
     You are an expert AI engagement coach for children's educational apps.
-    Analyze the provided usage data to generate sharp engagement intelligence.
+    Analyze the provided usage data to generate sharp, behavior-driven engagement intelligence.
     
     Usage Data: ${JSON.stringify(usageData)}
     Session Summary: ${JSON.stringify(sessionSummary || {})}
     
+    CRITICAL RULES:
+    1. NEVER use the phrase "Low engagement". If activity is high but consistency is low, call it "High activity in a single session".
+    2. DO NOT make assumptions about duration or intent. Focus on what actually happened.
+    3. Use a neutral, informative, and behavior-driven tone. Avoid judgment words.
+    
     Task:
-    1. Status Reason: Explain the engagement status in one short line.
-    2. Trend Explanation: Explain the usage graph/trend (1-2 lines).
-    3. Behavior Pattern: Identify the core behavioral pattern (e.g., burst usage, irregular timing).
+    1. Status Reason: Explain what happened in one short line.
+       - IF burst usage (many activities in 1 session), USE: "High activity concentrated in a single session. Consistency is still developing."
+    2. Trend Explanation: Explain the usage data (1-2 lines).
+       - IF burst usage, USE: "All ${usageData.totalActivities} interactions occurred within a single session. No activity was recorded on other days."
+    3. Behavior Pattern: Identify the core behavioral pattern.
+       - IF burst usage, USE: "High activity in a single session"
     4. Action Recommendation: ONE specific, realistic, and short action for the parent to improve engagement today.
+    5. Activity Level: "High" | "Medium" | "Low" (Based on total activities: 10+ is High, 5-9 is Medium, <5 is Low)
+    6. Consistency Level: "High" | "Medium" | "Low" (Based on active days/sessions: 4+ days is High, 2-3 days is Medium, 1 day is Low)
     
     Rules:
     - NO generic advice.
@@ -627,35 +569,27 @@ app.post('/api/analyze-engagement', async (req, res) => {
   `;
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
+    const response = await axios.post(GROQ_API_URL, {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: "Analyze engagement data and provide intelligence." }
+      ],
+      temperature: 0.2,
+      response_format: { type: "json_object" }
+    }, {
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: "Analyze engagement data and provide intelligence." }
-        ],
-        temperature: 0.2,
-        response_format: { type: "json_object" }
-      }),
+      }
     });
 
-    if (!response.ok) {
-      throw new Error(`Engagement API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    
+    const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Engagement Intelligence] Server error:", error);
+    console.error("[Engagement Intelligence] Server error:", error.response?.data || error.message);
     res.status(200).json({
       statusReason: "Engagement is currently stable with consistent daily usage.",
       trendExplanation: "Usage has been steady throughout the week with no major spikes or drops.",
@@ -701,35 +635,27 @@ app.post('/api/analyze-sentiment', async (req, res) => {
   `;
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
+    const response = await axios.post(GROQ_API_URL, {
+      model: "llama-3.1-8b-instant",
+      messages: [
+        { role: "system", content: systemPrompt.replace("{message}", message) },
+        { role: "user", content: "Analyze the sentiment of this message." }
+      ],
+      temperature: 0.1,
+      response_format: { type: "json_object" }
+    }, {
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        messages: [
-          { role: "system", content: systemPrompt.replace("{message}", message) },
-          { role: "user", content: "Analyze the sentiment of this message." }
-        ],
-        temperature: 0.1,
-        response_format: { type: "json_object" }
-      }),
+      }
     });
 
-    if (!response.ok) {
-      throw new Error(`Sentiment API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    
+    const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Sentiment Analysis] Server error:", error);
+    console.error("[Sentiment Analysis] Server error:", error.response?.data || error.message);
     res.status(200).json({
       score: 70,
       label: "Neutral",
@@ -772,37 +698,27 @@ app.post('/api/analyze-early-risk', async (req, res) => {
   `;
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
+    const response = await axios.post(GROQ_API_URL, {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: "Analyze the early risk in this message sequence." }
+      ],
+      temperature: 0.2,
+      response_format: { type: "json_object" }
+    }, {
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: "Analyze the early risk in this message sequence." }
-        ],
-        temperature: 0.2,
-        response_format: { type: "json_object" }
-      }),
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error(`[Early Risk] Groq API Error:`, errorData);
-      throw new Error(`Groq API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    
+    const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Early Risk Analysis] Server error:", error);
+    console.error("[Early Risk Analysis] Server error:", error.response?.data || error.message);
     res.status(200).json({
       early_risk: false,
       risk_type: "none",
@@ -810,6 +726,126 @@ app.post('/api/analyze-early-risk', async (req, res) => {
       confidence: 0,
       explanation: "Predictive analysis unavailable."
     });
+  }
+});
+
+// 11. Full Report Generation Endpoint
+app.post('/api/generate-full-report', async (req, res) => {
+  console.log("✅ HIT generate-full-report");
+  const { allData } = req.body;
+
+  if (!allData) {
+    return res.status(400).json({ error: 'Data is required' });
+  }
+
+  const { extractedData, childName = "Alex" } = allData;
+  console.log("[Report] Generating from structured data:", JSON.stringify(extractedData));
+
+  const systemPrompt = `
+    You are a world-class AI child development specialist and behavioral psychologist.
+    Your task is to generate a 4-page detailed, professional, and data-driven developmental report for parents.
+    
+    STRICT DATA SOURCE: You MUST use the following extracted metrics for ALL sections. 
+    Extracted Data: ${JSON.stringify(extractedData)}
+    
+    REPORT STRUCTURE & CONTENT RULES:
+    
+    1. Executive Overview:
+       - MUST reference total interactions: ${extractedData?.totalMessages || 0}.
+       - Mention main topics explored (Math: ${extractedData?.topics?.math}%, Science: ${extractedData?.topics?.science}%, etc.).
+       - Explicitly state presence/absence of emotional signals (Sad: ${extractedData?.emotions?.sad}) or unsafe interactions (Self-Harm: ${extractedData?.unsafe?.selfHarm}, Violence: ${extractedData?.unsafe?.violence}, Inappropriate: ${extractedData?.unsafe?.inappropriate}).
+       - ZERO generic filler. If data exists, describe it exactly as it is.
+       - Use "Low interaction volume, insights may be approximate" if total messages < 5.
+    
+    2. Key Performance Metrics:
+       - Use the provided metrics summary: ${JSON.stringify(allData.intelligence || {})}.
+       - For EACH metric (Curiosity, Math Confidence, Attention Span), provide a 1-line explanation based on ACTUAL behavior from extractedData.
+       - Example: "Math confidence is 40% due to limited math engagement (${extractedData?.topics?.math}% of total topics)."
+       - Emotional Stability: ${extractedData?.emotionalStability}. (Logic: selfHarm > 0 = Unstable, sadness > 0 = Needs Attention, else Stable).
+    
+    3. Behavioral Analysis:
+       - Use actual emotional counts: ${JSON.stringify(extractedData?.emotions)}.
+       - Use unsafe counts: ${JSON.stringify(extractedData?.unsafe)}.
+       - Use rude count: ${extractedData?.rude}.
+       - If sadness/distress > 0, mention specific emotional signals detected.
+       - If self-harm > 0, mark as CRITICAL priority.
+       - If violence > 0, mention safety concerns without exaggeration.
+       - If inappropriate (curiosity-based like "nuke") > 0, categorize as "Unsafe Curiosity" rather than violent intent.
+       - Do NOT use template text like "Alex seems well adjusted" unless data supports it.
+    
+    4. Educational Progress:
+       - MUST use topic distribution: Math ${extractedData?.topics?.math}%, Science ${extractedData?.topics?.science}%, Stories ${extractedData?.topics?.stories}%.
+       - Connect high scores to specific curiosity in that domain.
+       - If a topic is 0%, mention it as an opportunity for growth.
+    
+    5. Safety & Risk Report:
+       - Based ONLY on unsafe counts: ${JSON.stringify(extractedData?.unsafe)} and rude: ${extractedData?.rude}.
+       - Rules: 
+         - 1 unsafe instance (any category) -> "Needs attention"
+         - 2+ unsafe (violence/inappropriate) -> "Moderate concern"
+         - Any self-harm -> "High concern" (if repeated, "Critical priority")
+         - Rude messages -> separate communication category.
+       - Do NOT mix emotional signals (sadness) with dangerous intent (unsafe).
+       - AVOID exaggerated language like "violent behavior risk" unless multiple violence signals exist.
+    
+    6. Parent Recommendations:
+       - MUST be generated from detected issues in the data.
+       - Low math % -> suggest specific math activities.
+       - Any self-harm -> suggest immediate professional consultation/support.
+       - High sadness -> suggest emotional check-ins.
+       - Low engagement (follow-ups: ${extractedData?.engagement?.followUps}) -> suggest interactive activities.
+    
+    STRICT OUTPUT FORMAT (JSON ONLY):
+    {
+      "title": "Full Developmental & Safety Report",
+      "childName": "${childName}",
+      "date": "${new Date().toLocaleDateString()}",
+      "sections": [
+        {
+          "heading": "string",
+          "subheading": "string",
+          "content": "string (Long, detailed paragraphs - at least 300 words per section. Use real data points throughout)",
+          "key_takeaways": ["string", "string", "string"]
+        }
+      ],
+      "metrics_summary": {
+        "curiosity": number,
+        "mathConfidence": number,
+        "attentionSpan": number,
+        "overall_stability": "${extractedData?.emotionalStability}"
+      }
+    }
+    
+    Rules:
+    - NO "data is limited", "cannot assess", or "insufficient information".
+    - Use the provided data to build a narrative of what was ACTUALLY observed.
+    - Professional, supportive, and data-grounded tone.
+    - Output JSON ONLY.
+  `;
+
+  try {
+    const response = await axios.post(GROQ_API_URL, {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: "Generate the full developmental report based on the provided extracted data metrics." }
+      ],
+      temperature: 0.3,
+      response_format: { type: "json_object" }
+    }, {
+      headers: {
+        "Authorization": `Bearer ${GROQ_REPORT_KEY}`,
+        "Content-Type": "application/json",
+      }
+    });
+
+    const content = response.data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Empty AI response");
+    
+    res.status(200).json(JSON.parse(content));
+  } catch (error) {
+    console.error("[Full Report Analysis] Server error:", error.response?.data || error.message);
+    res.status(500).json({ error: `Failed to generate report: ${error.message}` });
   }
 });
 

@@ -6,10 +6,15 @@
  * and enforcement logic for the child's chat application.
  */
 
+import { getConfig } from "./configStore";
+
+export type ScreenTimeMode = "strict" | "balanced" | "learning";
+
 export interface ScreenTimeSettings {
   dailyLimit: number; // in minutes
   isLocked: boolean;
   restrictionEnabled: boolean;
+  mode: ScreenTimeMode;
 }
 
 export interface UsageSession {
@@ -20,11 +25,7 @@ export interface UsageSession {
 const SETTINGS_KEY = "screen_time_settings";
 const SESSIONS_KEY = "usage_sessions";
 
-const DEFAULT_SETTINGS: ScreenTimeSettings = {
-  dailyLimit: 60,
-  isLocked: false,
-  restrictionEnabled: true,
-};
+export const DEFAULT_SETTINGS: ScreenTimeSettings = getConfig().screenTime.defaultSettings as any;
 
 /**
  * Get the current screen time settings from localStorage

@@ -1,6 +1,9 @@
 import { LLMIntelligenceResult } from "./types";
+import { getConfig } from "../configStore";
 
-const ANALYZE_API_URL = "http://localhost:3001/api/analyze-intelligence";
+const config = getConfig();
+const ANALYZE_API_URL = `${config.api.baseUrl}${config.api.intelligence}`;
+const DECISION_ENGINE_URL = `${config.api.baseUrl}${config.api.decisionEngine}`;
 
 /**
  * Perform LLM-based semantic analysis of child behavior using reasoning.
@@ -74,7 +77,7 @@ export async function getDecisionInsights(metrics: any, history: any[]): Promise
   }
 
   try {
-    const response = await fetch("http://localhost:3001/api/decision-engine", {
+    const response = await fetch(DECISION_ENGINE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ metrics, history }),

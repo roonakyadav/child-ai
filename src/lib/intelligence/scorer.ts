@@ -1,4 +1,5 @@
 import { LLMIntelligenceResult, Session, Activity, IntelligenceMetrics } from "./types";
+import { getConfig } from "../configStore";
 
 /**
  * Perform hybrid scoring (70% LLM + 30% Behavioral) with anti-gaming protections.
@@ -56,27 +57,30 @@ export function calculateHybridMetrics(
 function calculateBehavioralSignals(sessions: Session[], activities: Activity[]): number | null {
   if (sessions.length === 0) return null;
 
+  const config = getConfig();
+  const bConfig = config.intelligence.behavioral;
+
   // Session Consistency: Days with at least one session in the last 7 days
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
-  const last7Days = new Set(
+  const lastXDays = new Set(
     sessions
-      .filter(s => now - s.startTime < 7 * dayMs)
+      .filter(s => now - s.startTime < bConfig.consistencyWindowDays * dayMs)
       .map(s => new Date(s.startTime).toDateString())
   ).size;
 
-  const consistencyScore = (last7Days / 7) * 100;
+  const consistencyScore = (lastXDays / bConfig.consistencyWindowDays) * 100;
 
   // Session Quality: Average duration and interaction density
   const avgDuration = sessions.reduce((sum, s) => sum + s.durationMinutes, 0) / sessions.length;
-  const durationScore = Math.min(100, (avgDuration / 15) * 100); // 15 mins target session
+  const durationScore = Math.min(100, (avgDuration / bConfig.targetSessionDurationMinutes) * 100); 
 
   const avgMessagesPerSession = activities.length / sessions.length;
-  const densityScore = Math.min(100, (avgMessagesPerSession / 5) * 100); // 5 messages target session
+  const densityScore = Math.min(100, (avgMessagesPerSession / bConfig.targetInteractionDensity) * 100);
 
   // Drop-off Rate: Are they coming back?
-  const recentSessions = sessions.filter(s => now - s.startTime < 2 * dayMs).length;
-  const dropOffPenalty = recentSessions === 0 ? 0.7 : 1.0;
+  const recentSessions = sessions.filter(s => now - s.startTime < bConfig.recentSessionWindowDays * dayMs).length;
+  const dropOffPenalty = recentSessions === 0 ? bConfig.dropOffPenalty : 1.0;
 
   return Math.round((consistencyScore * 0.4 + durationScore * 0.3 + densityScore * 0.3) * dropOffPenalty);
 }
@@ -88,11 +92,14 @@ function applyAntiGamingProtections(llmResult: LLMIntelligenceResult, activities
   const result = { ...llmResult };
   if (result.curiosity === null || result.attentionSpan === null) return result;
   
+  const config = getConfig();
+  const aConfig = config.intelligence.antiGaming;
+
   // Anti-Gaming: Repeated similar questions (diminishing returns)
   const uniqueQuestions = new Set(activities.map(a => a.userText.toLowerCase().trim())).size;
   const diversityRatio = uniqueQuestions / activities.length;
   
-  if (diversityRatio < 0.4 && activities.length > 5) {
+  if (diversityRatio < aConfig.diversityRatioThreshold && activities.length > aConfig.minActivitiesForPenalty) {
     // Diminishing returns if they keep asking the same thing
     result.curiosity = Math.round(result.curiosity * (0.6 + diversityRatio));
   }

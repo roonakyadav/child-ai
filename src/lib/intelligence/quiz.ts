@@ -1,30 +1,34 @@
-import { QuizData } from "@/types";
+import { QuizState } from "../intentStore";
+import { getConfig } from "../configStore";
 
-const BACKEND_API_URL = "http://localhost:3001/api/chat";
-const GROQ_MODEL = "llama-3.1-8b-instant";
+const config = getConfig();
+const BACKEND_API_URL = `${config.api.baseUrl}${config.api.chat}`;
+const GROQ_MODEL = config.api.model;
 
 /**
  * Generates a structured quiz using LLM with strict JSON output.
  */
-export async function generateQuiz(topic: string = "general knowledge"): Promise<QuizData | null> {
+export async function generateQuiz(topic: string = "general knowledge"): Promise<QuizState | null> {
   const prompt = `You are a fun educational assistant. Generate a single Multiple Choice Question (MCQ) for a child about: ${topic}.
   
   Return ONLY a valid JSON object with this exact structure:
   {
     "question": "The question text",
-    "options": [
-      { "label": "A", "text": "Option 1" },
-      { "label": "B", "text": "Option 2" },
-      { "label": "C", "text": "Option 3" },
-      { "label": "D", "text": "Option 4" }
-    ],
-    "correct_answer": "A"
+    "options": {
+      "A": "Option text 1",
+      "B": "Option text 2",
+      "C": "Option text 3",
+      "D": "Option text 4"
+    },
+    "correctAnswer": "A",
+    "explanation": "A very short, simple explanation of why the answer is correct for a child."
   }
   
   Rules:
-  - Return ONLY the JSON object.
-  - No extra text, no markdown code blocks, no explanation.
-  - Ensure correct_answer is exactly "A", "B", "C", or "D".
+  - Return ONLY the raw JSON object. 
+  - DO NOT include markdown code blocks (no \`\`\`json).
+  - DO NOT include any preamble or introductory text like "Here is your quiz".
+  - Ensure correctAnswer is exactly "A", "B", "C", or "D".
   - Make it fun and age-appropriate.`;
 
   try {
@@ -45,17 +49,17 @@ export async function generateQuiz(topic: string = "general knowledge"): Promise
 
     // Clean markdown if AI included it
     const jsonStr = content.replace(/```json|```/g, "").trim();
-    const quiz: QuizData = JSON.parse(jsonStr);
+    const quiz: QuizState = JSON.parse(jsonStr);
 
     // Validation Layer
-    if (!quiz.question || !quiz.options || quiz.options.length !== 4 || !quiz.correct_answer) {
+    if (!quiz.question || !quiz.options || !quiz.correctAnswer || !quiz.explanation) {
       console.warn("[QuizService] Invalid quiz structure received", quiz);
       return null;
     }
 
     const validLabels = ["A", "B", "C", "D"];
-    if (!validLabels.includes(quiz.correct_answer.toUpperCase())) {
-      console.warn("[QuizService] Invalid correct answer label", quiz.correct_answer);
+    if (!validLabels.includes(quiz.correctAnswer.toUpperCase())) {
+      console.warn("[QuizService] Invalid correct answer label", quiz.correctAnswer);
       return null;
     }
 
