@@ -115,7 +115,7 @@ const ParentSettings = () => {
   const handleReset = () => {
     if (window.confirm("Are you sure you want to reset all data? This cannot be undone.")) {
       localStorage.clear();
-      window.location.reload();
+      window.location.href = "/";
     }
   };
 
