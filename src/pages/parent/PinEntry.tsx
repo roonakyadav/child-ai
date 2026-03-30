@@ -163,14 +163,14 @@ export default function PinEntry() {
           </form>
         </div>
 
-        {/* Muted helper text */}
+        {/* Clearly visible helper text */}
         <motion.p 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-          className="mt-8 text-center text-[11px] font-black text-primary/30 uppercase tracking-[0.3em]"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="mt-10 text-center text-[14px] font-black text-primary uppercase tracking-[0.2em] bg-white/80 py-4 rounded-[2rem] border border-primary/20 shadow-soft backdrop-blur-sm"
         >
-          Default Gateway: 1234
+          Default Gateway: <span className="text-primary underline underline-offset-4 decoration-4">1234</span>
         </motion.p>
       </motion.div>
     </div>
