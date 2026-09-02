@@ -29,7 +29,7 @@ interface Message {
   isAI: boolean;
   isBlocked?: boolean; // Indicates if message was blocked by safety filter
   meta?: { // Transparency metadata
-    status: "safe" | "filtered" | "guided";
+    status: "safe" | "filtered" | "guided" | "unknown";
     reason: string;
   };
 }
@@ -39,7 +39,7 @@ interface AIResponse {
   isAI: true;
   isBlocked?: boolean;
   meta?: {
-    status: "safe" | "filtered" | "guided";
+    status: "safe" | "filtered" | "guided" | "unknown";
     reason: string;
   };
 }
@@ -274,7 +274,7 @@ const Index = () => {
     }
     // ------------------------------------
 
-    if (risk.is_flagged) {
+    if (risk.status === "flagged") {
       setTimeout(() => {
         const safeResponse: AIResponse = {
           text: rewriteUnsafe(text),
@@ -294,6 +294,35 @@ const Index = () => {
           category: getCategory(text),
           timestamp: Date.now(),
           status: "filtered",
+          risk: risk,
+        });
+        
+        setIsLoading(false);
+      }, 600);
+      return;
+    }
+
+    // Handle UNKNOWN status - do not send to normal AI generation
+    if (risk.status === "unknown") {
+      setTimeout(() => {
+        const safeResponse: AIResponse = {
+          text: "I'm having trouble checking if that message is safe right now. Let's try something else! How about we talk about something fun like space, animals, or games? 🚀",
+          isAI: true,
+          isBlocked: true,
+          meta: {
+            status: "unknown",
+            reason: risk.reason,
+          },
+        };
+        setMessages((prev) => [...prev, safeResponse]);
+        
+        // Manual logging for unknown messages (since askGroq is bypassed)
+        saveActivity({
+          userText: text,
+          aiText: safeResponse.text,
+          category: getCategory(text),
+          timestamp: Date.now(),
+          status: "unknown",
           risk: risk,
         });
         

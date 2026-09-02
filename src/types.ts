@@ -13,8 +13,8 @@ export type InterventionMode = "normal" | "support" | "strict";
 
 export type EarlyRisk = {
   early_risk: boolean;
-  risk_type: "emotional_build_up" | "frustration" | "confusion" | "none";
-  severity: "low" | "medium";
+  risk_type: "emotional_build_up" | "frustration" | "confusion" | "none" | "unknown";
+  severity: "low" | "medium" | "unknown";
   confidence: number;
   explanation: string;
 };

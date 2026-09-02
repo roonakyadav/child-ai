@@ -10,7 +10,7 @@ export interface Activity {
   userText: string;
   aiText: string;
   category: string;
-  status: "safe" | "filtered" | "guided";
+  status: "safe" | "filtered" | "guided" | "unknown";
   timestamp: number;
   risk?: RiskResult; // Added for semantic risk analysis
   sentimentScore?: number; // AI-driven sentiment score (0-100)

@@ -43,7 +43,7 @@ export function saveAlerts(alerts: Alert[]): void {
  */
 export async function createAlert(message: string, risk: RiskResult): Promise<void> {
   // Only create alert if flagged and high severity
-  if (!risk.is_flagged || risk.severity !== "high") {
+  if (risk.status !== "flagged" || risk.severity !== "high") {
     return;
   }
 
@@ -76,12 +76,17 @@ export async function createAlert(message: string, risk: RiskResult): Promise<vo
 export async function createEarlyWarningAlert(message: string, risk: { 
   early_risk: boolean; 
   risk_type: string; 
-  severity: "low" | "medium"; 
+  severity: "low" | "medium" | "unknown"; 
   confidence: number; 
   explanation: string; 
 }): Promise<void> {
   // Only create alert if early risk and confidence > 70
   if (!risk.early_risk || risk.confidence <= 70) {
+    return;
+  }
+  
+  // Don't create alert if severity is unknown
+  if (risk.severity === "unknown") {
     return;
   }
 

@@ -8,16 +8,17 @@ import { isStrictModeEnabled } from "./modeEngine";
 import { getApiUrl, API_ENDPOINTS } from "./apiConfig";
 
 export interface RiskResult {
+  status: "safe" | "flagged" | "unknown";
   is_flagged: boolean;
-  severity: "low" | "medium" | "high";
-  category: "violence" | "self-harm" | "emotional" | "safe";
+  severity: "low" | "medium" | "high" | "unknown";
+  category: "violence" | "self-harm" | "emotional" | "safe" | "unknown";
   reason: string;
 }
 
 export interface PatternRisk {
   pattern_detected: boolean;
-  pattern_type: "escalation" | "emotional_distress" | "aggression" | "none";
-  severity: "low" | "medium" | "high";
+  pattern_type: "escalation" | "emotional_distress" | "aggression" | "none" | "unknown";
+  severity: "low" | "medium" | "high" | "unknown";
   explanation: string;
   confidence: number;
 }
@@ -54,9 +55,15 @@ export async function detectRiskyMessage(message: string): Promise<RiskResult> {
 
     const result: RiskResult = await response.json();
 
+    // Ensure status field is present (for backward compatibility with old backend responses)
+    if (!result.status) {
+      result.status = result.is_flagged ? "flagged" : "safe";
+    }
+
     // If Strict Mode is enabled, we lower the threshold for flagging
     if (isStrict && result.severity === "low") {
       result.is_flagged = true;
+      result.status = "flagged";
       result.reason = `[Strict Mode Override] ${result.reason}`;
     }
 
@@ -72,12 +79,13 @@ export async function detectRiskyMessage(message: string): Promise<RiskResult> {
     return result;
   } catch (error) {
     console.error("[Safety] Error during risk detection:", error);
-    // Safe default if API fails
+    // Fail-closed: return UNKNOWN when analysis is unavailable
     return {
+      status: "unknown",
       is_flagged: false,
-      severity: "low",
-      category: "safe",
-      reason: "Analysis unavailable, defaulting to safe."
+      severity: "unknown",
+      category: "unknown",
+      reason: "Analysis unavailable - safety status could not be determined"
     };
   }
 }
@@ -130,11 +138,12 @@ export async function analyzeBehaviorPattern(messages: { text: string; timestamp
     return result;
   } catch (error) {
     console.error("[Safety] Error during pattern analysis:", error);
+    // Fail-closed: return UNKNOWN when analysis is unavailable
     return {
       pattern_detected: false,
-      pattern_type: "none",
-      severity: "low",
-      explanation: "Pattern analysis unavailable.",
+      pattern_type: "unknown",
+      severity: "unknown",
+      explanation: "Pattern analysis unavailable - pattern could not be determined",
       confidence: 0
     };
   }
@@ -177,12 +186,13 @@ export async function analyzeEarlyRisk(messages: { text: string; timestamp: numb
     return await response.json();
   } catch (error) {
     console.error("[Safety] Error during early risk analysis:", error);
+    // Fail-closed: return UNKNOWN when analysis is unavailable
     return {
       early_risk: false,
-      risk_type: "none",
-      severity: "low",
+      risk_type: "unknown",
+      severity: "unknown",
       confidence: 0,
-      explanation: "Predictive analysis unavailable."
+      explanation: "Predictive analysis unavailable - risk could not be determined"
     };
   }
 }

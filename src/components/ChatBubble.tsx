@@ -7,7 +7,7 @@ interface ChatBubbleProps {
   index: number;
   isBlocked?: boolean; // Indicates if message was blocked by safety filter
   meta?: { // Transparency metadata
-    status: "safe" | "filtered" | "guided";
+    status: "safe" | "filtered" | "guided" | "unknown";
     reason: string;
   };
 }

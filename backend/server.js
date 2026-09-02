@@ -527,15 +527,28 @@ app.post('/api/detect-risk', async (req, res) => {
     const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
-    res.status(200).json(JSON.parse(content));
+    const parsed = JSON.parse(content);
+    
+    // Validate AI response structure
+    if (typeof parsed.is_flagged !== 'boolean' ||
+        !['low', 'medium', 'high'].includes(parsed.severity) ||
+        !['violence', 'self-harm', 'emotional', 'safe'].includes(parsed.category)) {
+      throw new Error("Invalid AI response structure");
+    }
+    
+    // Add explicit status field
+    parsed.status = parsed.is_flagged ? "flagged" : "safe";
+    
+    res.status(200).json(parsed);
   } catch (error) {
     console.error("[Risk Detection] Server error:", error.response?.data || error.message);
-    // Safe default if API fails
+    // Fail-closed: return UNKNOWN when analysis is unavailable
     res.status(200).json({
+      status: "unknown",
       is_flagged: false,
-      severity: "low",
-      category: "safe",
-      reason: "Analysis unavailable, defaulting to safe."
+      severity: "unknown",
+      category: "unknown",
+      reason: "Analysis unavailable - safety status could not be determined"
     });
   }
 });
@@ -600,14 +613,25 @@ app.post('/api/analyze-pattern', async (req, res) => {
     const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
-    res.status(200).json(JSON.parse(content));
+    const parsed = JSON.parse(content);
+    
+    // Validate AI response structure
+    if (typeof parsed.pattern_detected !== 'boolean' ||
+        !['escalation', 'emotional_distress', 'aggression', 'none'].includes(parsed.pattern_type) ||
+        !['low', 'medium', 'high'].includes(parsed.severity) ||
+        typeof parsed.confidence !== 'number') {
+      throw new Error("Invalid AI response structure");
+    }
+    
+    res.status(200).json(parsed);
   } catch (error) {
     console.error("[Pattern Analysis] Server error:", error.response?.data || error.message);
+    // Fail-closed: return UNKNOWN when analysis is unavailable
     res.status(200).json({
       pattern_detected: false,
-      pattern_type: "none",
-      severity: "low",
-      explanation: "Analysis unavailable.",
+      pattern_type: "unknown",
+      severity: "unknown",
+      explanation: "Analysis unavailable - pattern could not be determined",
       confidence: 0
     });
   }
@@ -880,15 +904,26 @@ app.post('/api/analyze-early-risk', async (req, res) => {
     const content = response.data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
-    res.status(200).json(JSON.parse(content));
+    const parsed = JSON.parse(content);
+    
+    // Validate AI response structure
+    if (typeof parsed.early_risk !== 'boolean' ||
+        !['emotional_build_up', 'frustration', 'confusion', 'suspicious', 'none'].includes(parsed.risk_type) ||
+        !['low', 'medium', 'high'].includes(parsed.severity) ||
+        typeof parsed.confidence !== 'number') {
+      throw new Error("Invalid AI response structure");
+    }
+    
+    res.status(200).json(parsed);
   } catch (error) {
     console.error("[Early Risk Analysis] Server error:", error.response?.data || error.message);
+    // Fail-closed: return UNKNOWN when analysis is unavailable
     res.status(200).json({
       early_risk: false,
-      risk_type: "none",
-      severity: "low",
+      risk_type: "unknown",
+      severity: "unknown",
       confidence: 0,
-      explanation: "Predictive analysis unavailable."
+      explanation: "Predictive analysis unavailable - risk could not be determined"
     });
   }
 });
