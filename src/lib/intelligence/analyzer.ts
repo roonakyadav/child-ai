@@ -1,10 +1,5 @@
 import { LLMIntelligenceResult } from "./types";
-import { getConfig } from "../configStore";
-import { getApiUrl, API_ENDPOINTS } from "../apiConfig";
-
-const config = getConfig();
-const ANALYZE_API_URL = getApiUrl(API_ENDPOINTS.analyzeIntelligence);
-const DECISION_ENGINE_URL = getApiUrl(API_ENDPOINTS.decisionEngine);
+import { post } from "../apiClient";
 
 /**
  * Perform LLM-based semantic analysis of child behavior using reasoning.
@@ -25,17 +20,7 @@ export async function analyzeChildBehavior(messages: { message: string, timestam
   }
 
   try {
-    const response = await fetch(ANALYZE_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Analysis API failed with status: ${response.status}`);
-    }
-
-    const data = await response.json();
+    const data = await post<LLMIntelligenceResult>('/api/analyze-intelligence', { messages });
     
     // Extract 2-3 real evidence messages if not provided by backend
     // (Ideally backend should provide them, let's assume it does now or we pick them)
@@ -78,14 +63,7 @@ export async function getDecisionInsights(metrics: any, history: any[]): Promise
   }
 
   try {
-    const response = await fetch(DECISION_ENGINE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ metrics, history }),
-    });
-
-    if (!response.ok) throw new Error("Decision engine failed");
-    return await response.json();
+    return await post<any>('/api/decision-engine', { metrics, history });
   } catch (error) {
     console.error("[Decision Engine] Error:", error);
     return {

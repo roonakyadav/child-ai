@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { post } from "@/lib/apiClient";
 import {
   Clock,
   MessageSquare,
@@ -135,22 +136,14 @@ const DashboardOverview = () => {
 
       setIsGenerating(true);
       try {
-        const response = await fetch(`${config.api.baseUrl}${config.api.insights}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ summary }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          // Validate data schema before setting
-          if (data && typeof data.keyInsight === 'string' && Array.isArray(data.smartInsights)) {
-            setAiInsights(data);
-            localStorage.setItem("ai_insights_cache", JSON.stringify({ data, timestamp: Date.now() }));
-            localStorage.setItem("ai_insights_activity_count", totalQuestions.toString());
-          } else {
-            console.error("[Dashboard] Invalid insights schema received:", data);
-          }
+        const data = await post<any>('/api/insights', { summary });
+        // Validate data schema before setting
+        if (data && typeof data.keyInsight === 'string' && Array.isArray(data.smartInsights)) {
+          setAiInsights(data);
+          localStorage.setItem("ai_insights_cache", JSON.stringify({ data, timestamp: Date.now() }));
+          localStorage.setItem("ai_insights_activity_count", totalQuestions.toString());
+        } else {
+          console.error("[Dashboard] Invalid insights schema received:", data);
         }
       } catch (error) {
         console.error("[Dashboard] Error fetching AI insights:", error);
@@ -433,30 +426,20 @@ const DashboardOverview = () => {
           .map(a => a.userText);
       }
 
-      const response = await fetch(`${config.api.baseUrl}${config.api.deepAnalysis}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          insight, 
-          summary,
-          flaggedMessage: flaggedMsg,
-          recentContext: filteredContext,
-          insightType: type
-        }),
+      const data = await post<any>('/api/deep-analysis', { 
+        insight, 
+        summary,
+        flaggedMessage: flaggedMsg,
+        recentContext: filteredContext,
+        insightType: type
       });
-
-      if (response.ok) {
-        const data = await response.json();
         
-        // Signal Filtering: Limit to max 3 relevant signals
-        if (data.signals) {
-          data.signals = Array.from(new Set(data.signals)).slice(0, 3);
-        }
-
-        setDeepAnalysis(data);
-      } else {
-        throw new Error("Deep analysis failed");
+      // Signal Filtering: Limit to max 3 relevant signals
+      if (data.signals) {
+        data.signals = Array.from(new Set(data.signals)).slice(0, 3);
       }
+
+      setDeepAnalysis(data);
     } catch (error) {
       console.error("[Dashboard] Error explaining insight:", error);
     }

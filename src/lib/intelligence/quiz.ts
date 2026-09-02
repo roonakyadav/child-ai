@@ -1,9 +1,8 @@
 import { QuizState } from "../intentStore";
 import { getConfig } from "../configStore";
-import { getApiUrl, API_ENDPOINTS } from "../apiConfig";
+import { post } from "../apiClient";
 
 const config = getConfig();
-const BACKEND_API_URL = getApiUrl(API_ENDPOINTS.chat);
 const GROQ_MODEL = config.api.model;
 
 /**
@@ -33,17 +32,10 @@ export async function generateQuiz(topic: string = "general knowledge"): Promise
   - Make it fun and age-appropriate.`;
 
   try {
-    const response = await fetch(BACKEND_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [{ role: "user", content: prompt }],
-      }),
+    const data = await post<any>('/api/chat', {
+      model: GROQ_MODEL,
+      messages: [{ role: "user", content: prompt }],
     });
-
-    if (!response.ok) return null;
-    const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
     
     if (!content) return null;

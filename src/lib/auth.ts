@@ -5,7 +5,7 @@
  * Handles secure PIN storage using simple hashing and server-backed session management.
  */
 
-import { getApiUrl } from "./apiConfig";
+import { post, get } from './apiClient';
 
 const PIN_STORAGE_KEY = "parent_pin_hash";
 const PIN_SETUP_KEY = "parent_pin_setup_complete";
@@ -96,23 +96,11 @@ export async function loginWithPin(pin: string): Promise<boolean> {
   }
 
   try {
-    const response = await fetch(getApiUrl('/api/auth/parent/login'), {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        pin,
-        storedPinHash
-      }),
+    const data = await post<{ success: boolean }>('/api/auth/parent/login', {
+      pin,
+      storedPinHash
     });
 
-    if (!response.ok) {
-      return false;
-    }
-
-    const data = await response.json();
     return data.success === true;
   } catch (error) {
     console.error('Login error:', error);
@@ -126,16 +114,7 @@ export async function loginWithPin(pin: string): Promise<boolean> {
  */
 export async function verifySession(): Promise<boolean> {
   try {
-    const response = await fetch(getApiUrl('/api/auth/parent/session'), {
-      method: 'GET',
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      return false;
-    }
-
-    const data = await response.json();
+    const data = await get<{ authenticated: boolean }>('/api/auth/parent/session');
     return data.authenticated === true;
   } catch (error) {
     console.error('Session verification error:', error);
@@ -149,10 +128,7 @@ export async function verifySession(): Promise<boolean> {
  */
 export async function logout(): Promise<void> {
   try {
-    await fetch(getApiUrl('/api/auth/parent/logout'), {
-      method: 'POST',
-      credentials: 'include',
-    });
+    await post('/api/auth/parent/logout', {});
   } catch (error) {
     console.error('Logout error:', error);
   }

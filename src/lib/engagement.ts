@@ -1,6 +1,7 @@
-import { Activity, Session } from "./intelligence/types";
+import { Activity } from "./intelligence/types";
 import { groupIntoSessions } from "./intelligence/aggregator";
-import { getApiUrl, API_ENDPOINTS } from "./apiConfig";
+import { API_ENDPOINTS } from "./apiConfig";
+import { post } from "./apiClient";
 
 export interface EngagementIntelligence {
   status: "High Engagement" | "Moderate Engagement" | "Developing Engagement";
@@ -41,26 +42,19 @@ export async function getEngagementIntelligence(activities: Activity[]): Promise
 
   // 4. Call LLM for Deep Intelligence
   try {
-    const response = await fetch(getApiUrl(API_ENDPOINTS.analyzeEngagement), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        usageData: {
-          activeDays,
-          totalSessions: sessions.length,
-          avgSessionLength,
-          totalActivities: activities.length
-        },
-        sessionSummary: sessions.slice(0, 5).map(s => ({
-          duration: s.durationMinutes,
-          messageCount: s.messages.length,
-          timestamp: s.startTime
-        }))
-      }),
+    const aiData = await post<any>(API_ENDPOINTS.analyzeEngagement, {
+      usageData: {
+        activeDays,
+        totalSessions: sessions.length,
+        avgSessionLength,
+        totalActivities: activities.length
+      },
+      sessionSummary: sessions.slice(0, 5).map(s => ({
+        duration: s.durationMinutes,
+        messageCount: s.messages.length,
+        timestamp: s.startTime
+      }))
     });
-
-    if (!response.ok) throw new Error("Engagement API failed");
-    const aiData = await response.json();
 
     return {
       status,

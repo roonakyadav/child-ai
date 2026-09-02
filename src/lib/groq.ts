@@ -8,10 +8,9 @@ import { getMessages, addUserMessage, addAssistantMessage } from "@/lib/conversa
 import { logInteraction } from "@/lib/activityLogger";
 import { getIntentState, setIntent } from "@/lib/intentStore";
 import { getConfig } from "@/lib/configStore";
-import { getApiUrl, API_ENDPOINTS } from "@/lib/apiConfig";
+import { post } from "./apiClient";
 
 const config = getConfig();
-const BACKEND_API_URL = getApiUrl(API_ENDPOINTS.chat);
 const GROQ_MODEL = config.api.model;
 
 export interface GroqMessage {
@@ -58,34 +57,20 @@ export async function askGroq(prompt: string, intent?: string): Promise<string |
   const history = getMessages().slice(-10);
 
   try {
-    const response = await fetch(BACKEND_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          ...history,
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      }),
+    const data = await post<any>('/api/chat', {
+      model: GROQ_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        ...history,
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Groq] Backend Error ${response.status}:`, errorText);
-      return null;
-    }
-
-    const data = await response.json();
     
     if (data.choices && data.choices.length > 0) {
       const aiText = data.choices[0].message?.content || null;
@@ -116,26 +101,19 @@ export async function askGroq(prompt: string, intent?: string): Promise<string |
  */
 export async function askParentAssistant(prompt: string): Promise<string | null> {
   try {
-    const response = await fetch(BACKEND_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          {
-            role: "system",
-            content: "You are a senior child safety and education expert. Your goal is to help parents guide their children through difficult or risky conversations by suggesting safe, positive, and educational redirections.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      }),
+    const data = await post<any>('/api/chat', {
+      model: GROQ_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "You are a senior child safety and education expert. Your goal is to help parents guide their children through difficult or risky conversations by suggesting safe, positive, and educational redirections.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
     });
-
-    if (!response.ok) return null;
-    const data = await response.json();
     return data.choices?.[0]?.message?.content || null;
   } catch (error) {
     console.error("[Groq] Parent assistant call failed:", error);

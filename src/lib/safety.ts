@@ -5,7 +5,8 @@
 
 import { EarlyRisk } from "@/types";
 import { isStrictModeEnabled } from "./modeEngine";
-import { getApiUrl, API_ENDPOINTS } from "./apiConfig";
+import { API_ENDPOINTS } from "./apiConfig";
+import { post } from "./apiClient";
 
 export interface RiskResult {
   status: "safe" | "flagged" | "unknown";
@@ -43,17 +44,7 @@ export async function detectRiskyMessage(message: string): Promise<RiskResult> {
   }
 
   try {
-    const response = await fetch(getApiUrl(API_ENDPOINTS.detectRisk), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Safety API failed with status: ${response.status}`);
-    }
-
-    const result: RiskResult = await response.json();
+    const result: RiskResult = await post<RiskResult>(API_ENDPOINTS.detectRisk, { message });
 
     // Ensure status field is present (for backward compatibility with old backend responses)
     if (!result.status) {
@@ -114,17 +105,7 @@ export async function analyzeBehaviorPattern(messages: { text: string; timestamp
   }
 
   try {
-    const response = await fetch(getApiUrl(API_ENDPOINTS.analyzePattern), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Pattern API failed with status: ${response.status}`);
-    }
-
-    const result: PatternRisk = await response.json();
+    const result: PatternRisk = await post<PatternRisk>(API_ENDPOINTS.analyzePattern, { messages });
 
     // Cache the result
     cache[cacheKey] = result;
@@ -151,7 +132,7 @@ export async function analyzeBehaviorPattern(messages: { text: string; timestamp
 /**
  * Safe fallback message for flagged content
  */
-export function rewriteUnsafe(input: string): string {
+export function rewriteUnsafe(_input: string): string {
   return "That topic isn't something I can help with, but we can still explore something fun and safe together! 😊 How about learning how the human body grows, or how games are made?";
 }
 
@@ -173,17 +154,8 @@ export async function analyzeEarlyRisk(messages: { text: string; timestamp: numb
   const recentMessages = messages.slice(-10);
 
   try {
-    const response = await fetch(getApiUrl(API_ENDPOINTS.analyzeEarlyRisk), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: recentMessages }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Early Risk API failed: ${response.status}`);
-    }
-
-    return await response.json();
+    const result: EarlyRisk = await post<EarlyRisk>(API_ENDPOINTS.analyzeEarlyRisk, { messages: recentMessages });
+    return result;
   } catch (error) {
     console.error("[Safety] Error during early risk analysis:", error);
     // Fail-closed: return UNKNOWN when analysis is unavailable

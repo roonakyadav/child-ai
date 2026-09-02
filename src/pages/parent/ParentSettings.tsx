@@ -5,6 +5,7 @@ import { isStrictModeEnabled, setStrictMode as saveStrictMode, updatePin, isVali
 import { Button } from "@/components/ui/button";
 import { gatherAllAppData, generatePDFReport, ReportData } from "@/lib/reportService";
 import { getConfig } from "@/lib/configStore";
+import { post } from "@/lib/apiClient";
 
 const ParentSettings = () => {
   const config = getConfig();
@@ -43,22 +44,9 @@ const ParentSettings = () => {
       setProgress(15);
       
       setStatus("AI is analyzing 4 pages of developmental patterns...");
-      const response = await fetch(`${config.api.baseUrl}${config.api.fullReport}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          allData: data 
-        })
+      const reportData: ReportData = await post<ReportData>('/api/generate-full-report', { 
+        allData: data 
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Report generation failed: ${errorText}`);
-      }
-      
-      const reportData: ReportData = await response.json();
       
       // If we are in the "test success" phase, reportData might just be {success: true}
       // So we handle that gracefully

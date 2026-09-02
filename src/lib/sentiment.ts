@@ -3,7 +3,8 @@
  * Real-time emotional and curiosity analysis for child-AI interactions.
  */
 
-import { getApiUrl, API_ENDPOINTS } from "./apiConfig";
+import { API_ENDPOINTS } from "./apiConfig";
+import { post } from "./apiClient";
 
 export interface SentimentResult {
   score: number;
@@ -18,17 +19,7 @@ export interface SentimentResult {
  */
 export async function analyzeSentiment(message: string): Promise<SentimentResult> {
   try {
-    const response = await fetch(getApiUrl(API_ENDPOINTS.analyzeSentiment), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Sentiment API failed with status: ${response.status}`);
-    }
-
-    return await response.json();
+    return await post<SentimentResult>(API_ENDPOINTS.analyzeSentiment, { message });
   } catch (error) {
     console.error("[Sentiment] Error during analysis:", error);
     // Safe fallback based on context (e.g., questions are generally positive)

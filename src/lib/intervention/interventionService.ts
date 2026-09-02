@@ -1,5 +1,5 @@
-import { Intervention, InterventionOutcome } from "@/types";
-import { getApiUrl } from "../apiConfig";
+import { Intervention, InteractionOutcome } from "@/types";
+import { post } from "../apiClient";
 
 const INTERVENTIONS_STORAGE_KEY = "interventions";
 
@@ -27,7 +27,7 @@ export function getInterventions(): Intervention[] {
 /**
  * Updates an existing intervention with its outcome.
  */
-export function updateInterventionOutcome(id: string, outcome: InterventionOutcome): void {
+export function updateInterventionOutcome(id: string, outcome: InteractionOutcome): void {
   const interventions = getInterventions();
   const updated = interventions.map((i) =>
     i.id === id ? { ...i, outcome } : i
@@ -38,26 +38,16 @@ export function updateInterventionOutcome(id: string, outcome: InterventionOutco
 /**
  * Analyzes the outcome of an intervention by comparing messages before and after.
  */
-export async function analyzeInterventionOutcome(intervention: Intervention): Promise<InterventionOutcome | null> {
+export async function analyzeInterventionOutcome(intervention: Intervention): Promise<InteractionOutcome | null> {
   if (intervention.messages_before.length === 0 || intervention.messages_after.length === 0) {
     return null;
   }
 
   try {
-    const response = await fetch(getApiUrl('/api/analyze-intervention'), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages_before: intervention.messages_before,
-        messages_after: intervention.messages_after,
-      }),
+    const outcome: InteractionOutcome = await post<InteractionOutcome>('/api/analyze-intervention', {
+      messages_before: intervention.messages_before,
+      messages_after: intervention.messages_after,
     });
-
-    if (!response.ok) {
-      throw new Error(`Intervention Analysis API failed: ${response.status}`);
-    }
-
-    const outcome: InterventionOutcome = await response.json();
     updateInterventionOutcome(intervention.id, outcome);
     return outcome;
   } catch (error) {
