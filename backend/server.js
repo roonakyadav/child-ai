@@ -6,6 +6,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
+const { validateBody } = require('./validation/middleware');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -116,26 +117,13 @@ function generateSessionToken() {
 // --- Authentication Endpoints ---
 
 // POST /api/auth/parent/login
-app.post('/api/auth/parent/login', generalLimiter, async (req, res) => {
-  const { pin } = req.body;
-
-  if (!pin || typeof pin !== 'string') {
-    return res.status(400).json({ error: 'PIN is required' });
-  }
-
-  // Validate PIN format (4-6 digits)
-  if (!/^\d{4,6}$/.test(pin)) {
-    return res.status(400).json({ error: 'Invalid PIN format' });
-  }
+app.post('/api/auth/parent/login', generalLimiter, validateBody('login'), async (req, res) => {
+  const { pin, storedPinHash } = req.body;
 
   // Hash the PIN for comparison (same as frontend)
   const pinHash = crypto.createHash('sha256').update(pin).digest('hex');
 
-  // Get stored PIN hash from client (sent in request for verification)
-  // In production, this would be stored server-side in a database
-  const { storedPinHash } = req.body;
-
-  if (!storedPinHash || pinHash !== storedPinHash) {
+  if (pinHash !== storedPinHash) {
     return res.status(401).json({ error: 'Invalid PIN' });
   }
 
@@ -213,12 +201,8 @@ app.get('/api/test', (req, res) => {
 });
 
 // 1. Chat Endpoint
-app.post('/api/chat', aiLimiter, async (req, res) => {
+app.post('/api/chat', aiLimiter, validateBody('chat'), async (req, res) => {
   const { messages, model } = req.body;
-
-  if (!messages) {
-    return res.status(400).json({ error: 'Messages array is required' });
-  }
 
   try {
     const response = await axios.post(GROQ_API_URL, {
@@ -239,12 +223,8 @@ app.post('/api/chat', aiLimiter, async (req, res) => {
 });
 
 // 2. Insights Endpoint
-app.post('/api/insights', aiLimiter, async (req, res) => {
+app.post('/api/insights', aiLimiter, validateBody('insights'), async (req, res) => {
   const { summary } = req.body;
-
-  if (!summary || typeof summary !== "object" || Object.keys(summary).length === 0) {
-    return res.status(400).json({ error: "Invalid summary data" });
-  }
 
   const topTopicsStr = summary.topTopics?.map(t => typeof t === 'string' ? t : `${t.name} (${t.count})`).join(', ') || 'None';
 
@@ -303,12 +283,8 @@ app.post('/api/insights', aiLimiter, async (req, res) => {
 });
 
 // 3. Domain-Scoped Deep Analysis Endpoint
-app.post('/api/deep-analysis', async (req, res) => {
+app.post('/api/deep-analysis', aiLimiter, validateBody('deepAnalysis'), async (req, res) => {
   const { insight, summary, flaggedMessage, recentContext, insightType } = req.body;
-
-  if (!insight || !summary || !insightType) {
-    return res.status(400).json({ error: 'Insight, summary, and insightType are required' });
-  }
 
   let systemPrompt = "";
 
@@ -638,12 +614,8 @@ app.post('/api/analyze-pattern', async (req, res) => {
 });
 
 // 7. High-Confidence Decision Engine Endpoint
-app.post('/api/decision-engine', async (req, res) => {
+app.post('/api/decision-engine', aiLimiter, validateBody('decisionEngine'), async (req, res) => {
   const { metrics, history } = req.body;
-
-  if (!metrics) {
-    return res.status(400).json({ error: 'Metrics are required' });
-  }
 
   const systemPrompt = `
     You are a high-confidence AI systems architect and child psychologist.
@@ -922,13 +894,9 @@ app.post('/api/analyze-early-risk', async (req, res) => {
 });
 
 // 11. Full Report Generation Endpoint
-app.post('/api/generate-full-report', aiLimiter, async (req, res) => {
+app.post('/api/generate-full-report', aiLimiter, validateBody('generateFullReport'), async (req, res) => {
   console.log("✅ HIT generate-full-report");
   const { allData } = req.body;
-
-  if (!allData) {
-    return res.status(400).json({ error: 'Data is required' });
-  }
 
   const { extractedData, childName = "Alex" } = allData;
   console.log("[Report] Generating from structured data:", JSON.stringify(extractedData));
