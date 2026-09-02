@@ -5,9 +5,13 @@ const cors = require('cors');
 const axios = require('axios');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Trust proxy for rate limiting when behind reverse proxy (Vercel, etc.)
+app.set('trust proxy', 1);
 
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -15,6 +19,35 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+
+// --- Rate Limiting Configuration ---
+
+// Environment variables with defaults
+const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'); // 15 minutes
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '100');
+const AI_RATE_LIMIT_MAX = parseInt(process.env.AI_RATE_LIMIT_MAX || '30');
+
+// General rate limiter for authentication endpoints
+const generalLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_MAX,
+  message: { error: 'Too many requests' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for test endpoint
+    return req.path === '/api/test';
+  }
+});
+
+// Stricter rate limiter for AI-intensive endpoints
+const aiLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: AI_RATE_LIMIT_MAX,
+  message: { error: 'Too many requests' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // --- Server-Side Session Management ---
 const sessions = new Map();
@@ -38,7 +71,7 @@ function generateSessionToken() {
 // --- Authentication Endpoints ---
 
 // POST /api/auth/parent/login
-app.post('/api/auth/parent/login', async (req, res) => {
+app.post('/api/auth/parent/login', generalLimiter, async (req, res) => {
   const { pin } = req.body;
 
   if (!pin || typeof pin !== 'string') {
@@ -85,7 +118,7 @@ app.post('/api/auth/parent/login', async (req, res) => {
 });
 
 // GET /api/auth/parent/session
-app.get('/api/auth/parent/session', (req, res) => {
+app.get('/api/auth/parent/session', generalLimiter, (req, res) => {
   const sessionId = req.cookies.parent_session;
 
   if (!sessionId) {
@@ -113,7 +146,7 @@ app.get('/api/auth/parent/session', (req, res) => {
 });
 
 // POST /api/auth/parent/logout
-app.post('/api/auth/parent/logout', (req, res) => {
+app.post('/api/auth/parent/logout', generalLimiter, (req, res) => {
   const sessionId = req.cookies.parent_session;
 
   if (sessionId) {
@@ -135,7 +168,7 @@ app.get('/api/test', (req, res) => {
 });
 
 // 1. Chat Endpoint
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', aiLimiter, async (req, res) => {
   const { messages, model } = req.body;
 
   if (!messages) {
@@ -161,7 +194,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // 2. Insights Endpoint
-app.post('/api/insights', async (req, res) => {
+app.post('/api/insights', aiLimiter, async (req, res) => {
   const { summary } = req.body;
 
   if (!summary || typeof summary !== "object" || Object.keys(summary).length === 0) {
@@ -342,7 +375,7 @@ app.post('/api/deep-analysis', async (req, res) => {
 });
 
 // 4. Intelligence Analysis Endpoint
-app.post('/api/analyze-intelligence', async (req, res) => {
+app.post('/api/analyze-intelligence', aiLimiter, async (req, res) => {
   const { messages } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
@@ -714,7 +747,7 @@ app.post('/api/analyze-engagement', async (req, res) => {
 });
 
 // 9. Sentiment Analysis Endpoint
-app.post('/api/analyze-sentiment', async (req, res) => {
+app.post('/api/analyze-sentiment', aiLimiter, async (req, res) => {
   const { message } = req.body;
 
   if (!message) {
@@ -844,7 +877,7 @@ app.post('/api/analyze-early-risk', async (req, res) => {
 });
 
 // 11. Full Report Generation Endpoint
-app.post('/api/generate-full-report', async (req, res) => {
+app.post('/api/generate-full-report', aiLimiter, async (req, res) => {
   console.log("✅ HIT generate-full-report");
   const { allData } = req.body;
 
