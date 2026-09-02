@@ -3,6 +3,8 @@
  * Manages all dynamic configurations stored in localStorage to ensure the app is fully data-driven.
  */
 
+import { API_BASE, API_ENDPOINTS } from "./apiConfig";
+
 const CONFIG_KEY = "app_dynamic_config";
 
 export interface AppConfig {
@@ -78,8 +80,8 @@ export interface AppConfig {
   };
 }
 
-// Support for VITE_API_URL environment variable with fallback for development
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+// Use centralized API configuration
+const API_BASE_URL = API_BASE;
 
 const DEFAULT_CONFIG: AppConfig = {
   ai: {
@@ -205,12 +207,12 @@ const DEFAULT_CONFIG: AppConfig = {
   },
   api: {
     baseUrl: API_BASE_URL,
-    chat: "/api/chat",
-    intelligence: "/api/analyze-intelligence",
-    decisionEngine: "/api/decision-engine",
-    insights: "/api/insights",
-    deepAnalysis: "/api/deep-analysis",
-    fullReport: "/api/generate-full-report",
+    chat: API_ENDPOINTS.chat,
+    intelligence: API_ENDPOINTS.analyzeIntelligence,
+    decisionEngine: API_ENDPOINTS.decisionEngine,
+    insights: API_ENDPOINTS.insights,
+    deepAnalysis: API_ENDPOINTS.deepAnalysis,
+    fullReport: API_ENDPOINTS.generateFullReport,
     model: "llama-3.1-8b-instant",
   },
 };

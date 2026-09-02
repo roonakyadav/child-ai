@@ -1,8 +1,9 @@
 import { QuizState } from "../intentStore";
 import { getConfig } from "../configStore";
+import { getApiUrl, API_ENDPOINTS } from "../apiConfig";
 
 const config = getConfig();
-const BACKEND_API_URL = `${config.api.baseUrl}${config.api.chat}`;
+const BACKEND_API_URL = getApiUrl(API_ENDPOINTS.chat);
 const GROQ_MODEL = config.api.model;
 
 /**

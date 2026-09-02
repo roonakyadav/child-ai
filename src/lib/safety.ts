@@ -5,6 +5,7 @@
 
 import { EarlyRisk } from "@/types";
 import { isStrictModeEnabled } from "./modeEngine";
+import { getApiUrl, API_ENDPOINTS } from "./apiConfig";
 
 export interface RiskResult {
   is_flagged: boolean;
@@ -41,7 +42,7 @@ export async function detectRiskyMessage(message: string): Promise<RiskResult> {
   }
 
   try {
-    const response = await fetch("http://localhost:3001/api/detect-risk", {
+    const response = await fetch(getApiUrl(API_ENDPOINTS.detectRisk), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message }),
@@ -105,7 +106,7 @@ export async function analyzeBehaviorPattern(messages: { text: string; timestamp
   }
 
   try {
-    const response = await fetch("http://localhost:3001/api/analyze-pattern", {
+    const response = await fetch(getApiUrl(API_ENDPOINTS.analyzePattern), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages }),
@@ -163,7 +164,7 @@ export async function analyzeEarlyRisk(messages: { text: string; timestamp: numb
   const recentMessages = messages.slice(-10);
 
   try {
-    const response = await fetch("http://localhost:3001/api/analyze-early-risk", {
+    const response = await fetch(getApiUrl(API_ENDPOINTS.analyzeEarlyRisk), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages: recentMessages }),

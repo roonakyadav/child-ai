@@ -1,5 +1,6 @@
 import { Activity, Session } from "./intelligence/types";
 import { groupIntoSessions } from "./intelligence/aggregator";
+import { getApiUrl, API_ENDPOINTS } from "./apiConfig";
 
 export interface EngagementIntelligence {
   status: "High Engagement" | "Moderate Engagement" | "Developing Engagement";
@@ -40,7 +41,7 @@ export async function getEngagementIntelligence(activities: Activity[]): Promise
 
   // 4. Call LLM for Deep Intelligence
   try {
-    const response = await fetch("http://localhost:3001/api/analyze-engagement", {
+    const response = await fetch(getApiUrl(API_ENDPOINTS.analyzeEngagement), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

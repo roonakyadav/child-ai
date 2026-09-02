@@ -3,6 +3,8 @@
  * Real-time emotional and curiosity analysis for child-AI interactions.
  */
 
+import { getApiUrl, API_ENDPOINTS } from "./apiConfig";
+
 export interface SentimentResult {
   score: number;
   label: string;
@@ -16,7 +18,7 @@ export interface SentimentResult {
  */
 export async function analyzeSentiment(message: string): Promise<SentimentResult> {
   try {
-    const response = await fetch("http://localhost:3001/api/analyze-sentiment", {
+    const response = await fetch(getApiUrl(API_ENDPOINTS.analyzeSentiment), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message }),

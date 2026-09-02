@@ -8,9 +8,10 @@ import { getMessages, addUserMessage, addAssistantMessage } from "@/lib/conversa
 import { logInteraction } from "@/lib/activityLogger";
 import { getIntentState, setIntent } from "@/lib/intentStore";
 import { getConfig } from "@/lib/configStore";
+import { getApiUrl, API_ENDPOINTS } from "@/lib/apiConfig";
 
 const config = getConfig();
-const BACKEND_API_URL = `${config.api.baseUrl}${config.api.chat}`;
+const BACKEND_API_URL = getApiUrl(API_ENDPOINTS.chat);
 const GROQ_MODEL = config.api.model;
 
 export interface GroqMessage {

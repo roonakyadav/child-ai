@@ -1,4 +1,5 @@
 import { Intervention, InterventionOutcome } from "@/types";
+import { getApiUrl } from "../apiConfig";
 
 const INTERVENTIONS_STORAGE_KEY = "interventions";
 
@@ -43,7 +44,7 @@ export async function analyzeInterventionOutcome(intervention: Intervention): Pr
   }
 
   try {
-    const response = await fetch("http://localhost:3001/api/analyze-intervention", {
+    const response = await fetch(getApiUrl('/api/analyze-intervention'), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

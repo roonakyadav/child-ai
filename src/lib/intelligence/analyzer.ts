@@ -1,9 +1,10 @@
 import { LLMIntelligenceResult } from "./types";
 import { getConfig } from "../configStore";
+import { getApiUrl, API_ENDPOINTS } from "../apiConfig";
 
 const config = getConfig();
-const ANALYZE_API_URL = `${config.api.baseUrl}${config.api.intelligence}`;
-const DECISION_ENGINE_URL = `${config.api.baseUrl}${config.api.decisionEngine}`;
+const ANALYZE_API_URL = getApiUrl(API_ENDPOINTS.analyzeIntelligence);
+const DECISION_ENGINE_URL = getApiUrl(API_ENDPOINTS.decisionEngine);
 
 /**
  * Perform LLM-based semantic analysis of child behavior using reasoning.
