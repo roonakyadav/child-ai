@@ -25,6 +25,7 @@ import {
   ArrowLeft,
   Bot,
 } from "lucide-react";
+import { logout } from "@/lib/auth";
 
 const navItems = [
   { title: "Overview", url: "/parent-dashboard/overview", icon: LayoutDashboard },
@@ -76,9 +77,8 @@ function ParentSidebar() {
 const ParentLayout = () => {
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    localStorage.removeItem("parent_authenticated");
-    localStorage.removeItem("parent_auth_time");
+  const handleLogout = async () => {
+    await logout();
     navigate("/parent");
   };
 
@@ -91,9 +91,8 @@ const ParentLayout = () => {
             <SidebarTrigger className="hover:bg-primary/5 text-primary" />
             <div className="h-4 w-px bg-primary/10" />
             <button
-              onClick={() => {
-                localStorage.removeItem("parent_authenticated");
-                localStorage.removeItem("parent_auth_time");
+              onClick={async () => {
+                await logout();
                 navigate("/");
               }}
               className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-primary transition-all group"

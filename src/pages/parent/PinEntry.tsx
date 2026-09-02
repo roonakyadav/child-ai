@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, ShieldCheck, AlertCircle } from "lucide-react";
-import { verifyPin, hasPinConfigured } from "@/lib/auth";
+import { loginWithPin, hasPinConfigured } from "@/lib/auth";
 
 export default function PinEntry() {
   const [pin, setPin] = useState(["", "", "", "", "", ""]);
@@ -55,11 +55,9 @@ export default function PinEntry() {
     if (pinString.length < 4 || pinString.length > 6) return;
 
     setIsSubmitting(true);
-    const isValid = await verifyPin(pinString);
+    const isValid = await loginWithPin(pinString);
     
     if (isValid) {
-      localStorage.setItem("parent_authenticated", "true");
-      localStorage.setItem("parent_auth_time", Date.now().toString());
       navigate("/parent-dashboard/overview");
     } else {
       setError(true);

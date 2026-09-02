@@ -1,30 +1,42 @@
 
 import { Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { verifySession } from "@/lib/auth";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 /**
- * Client-side Route Protection
+ * Server-Backed Route Protection
  * 
  * Ensures that only authenticated users can access the parent dashboard.
+ * Uses server-side session verification via HTTP-only cookies.
  * If not authenticated, redirects back to the PIN entry page.
  */
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const isAuth = localStorage.getItem("parent_authenticated") === "true";
-  const authTime = localStorage.getItem("parent_auth_time");
-  
-  // Session Expiration Check (30 minutes)
-  const SESSION_TIMEOUT = 30 * 60 * 1000;
-  const isExpired = authTime ? (Date.now() - parseInt(authTime)) > SESSION_TIMEOUT : true;
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
-  if (!isAuth || isExpired) {
-    // Clean up expired session if any
-    if (isAuth && isExpired) {
-      localStorage.removeItem("parent_authenticated");
-      localStorage.removeItem("parent_auth_time");
-    }
+  useEffect(() => {
+    const checkSession = async () => {
+      const isValid = await verifySession();
+      setIsAuthenticated(isValid);
+    };
+
+    checkSession();
+  }, []);
+
+  // Show loading state while checking session
+  if (isAuthenticated === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  // Redirect to PIN entry if not authenticated
+  if (!isAuthenticated) {
     return <Navigate to="/parent" replace />;
   }
 

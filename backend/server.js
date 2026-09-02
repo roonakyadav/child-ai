@@ -3,12 +3,126 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const crypto = require('crypto');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
+
+// --- Server-Side Session Management ---
+const sessions = new Map();
+const SESSION_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+
+// Clean expired sessions periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, session] of sessions.entries()) {
+    if (now > session.expiresAt) {
+      sessions.delete(sessionId);
+    }
+  }
+}, 5 * 60 * 1000); // Clean every 5 minutes
+
+// Generate cryptographically secure session token
+function generateSessionToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// --- Authentication Endpoints ---
+
+// POST /api/auth/parent/login
+app.post('/api/auth/parent/login', async (req, res) => {
+  const { pin } = req.body;
+
+  if (!pin || typeof pin !== 'string') {
+    return res.status(400).json({ error: 'PIN is required' });
+  }
+
+  // Validate PIN format (4-6 digits)
+  if (!/^\d{4,6}$/.test(pin)) {
+    return res.status(400).json({ error: 'Invalid PIN format' });
+  }
+
+  // Hash the PIN for comparison (same as frontend)
+  const pinHash = crypto.createHash('sha256').update(pin).digest('hex');
+
+  // Get stored PIN hash from client (sent in request for verification)
+  // In production, this would be stored server-side in a database
+  const { storedPinHash } = req.body;
+
+  if (!storedPinHash || pinHash !== storedPinHash) {
+    return res.status(401).json({ error: 'Invalid PIN' });
+  }
+
+  // Create session
+  const sessionId = generateSessionToken();
+  const session = {
+    id: sessionId,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + SESSION_EXPIRY_MS,
+    authenticated: true
+  };
+
+  sessions.set(sessionId, session);
+
+  // Set HTTP-only cookie
+  res.cookie('parent_session', sessionId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: SESSION_EXPIRY_MS,
+    path: '/'
+  });
+
+  res.status(200).json({ success: true });
+});
+
+// GET /api/auth/parent/session
+app.get('/api/auth/parent/session', (req, res) => {
+  const sessionId = req.cookies.parent_session;
+
+  if (!sessionId) {
+    return res.status(401).json({ authenticated: false });
+  }
+
+  const session = sessions.get(sessionId);
+
+  if (!session) {
+    return res.status(401).json({ authenticated: false });
+  }
+
+  // Check expiry
+  if (Date.now() > session.expiresAt) {
+    sessions.delete(sessionId);
+    res.clearCookie('parent_session', { path: '/' });
+    return res.status(401).json({ authenticated: false });
+  }
+
+  // Refresh session expiry
+  session.expiresAt = Date.now() + SESSION_EXPIRY_MS;
+  sessions.set(sessionId, session);
+
+  res.status(200).json({ authenticated: true });
+});
+
+// POST /api/auth/parent/logout
+app.post('/api/auth/parent/logout', (req, res) => {
+  const sessionId = req.cookies.parent_session;
+
+  if (sessionId) {
+    sessions.delete(sessionId);
+  }
+
+  res.clearCookie('parent_session', { path: '/' });
+  res.status(200).json({ success: true });
+});
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";

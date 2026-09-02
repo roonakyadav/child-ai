@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, ShieldCheck, AlertCircle, ArrowRight } from "lucide-react";
-import { setupPin, isValidPinFormat, markPinSetupComplete } from "@/lib/auth";
+import { setupPin, isValidPinFormat, markPinSetupComplete, loginWithPin } from "@/lib/auth";
 
 type SetupStep = "create" | "confirm" | "success";
 
@@ -107,12 +107,20 @@ export default function PinSetup() {
     
     try {
       await setupPin(pinString);
+      
+      // Login with the newly set PIN to create server session
+      const loginSuccess = await loginWithPin(pinString);
+      
+      if (!loginSuccess) {
+        setError("Failed to create session. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+      
       setStep("success");
       
       // Navigate to dashboard after success animation
       setTimeout(() => {
-        localStorage.setItem("parent_authenticated", "true");
-        localStorage.setItem("parent_auth_time", Date.now().toString());
         navigate("/parent-dashboard/overview");
       }, 1500);
     } catch (err) {

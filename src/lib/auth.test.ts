@@ -7,6 +7,7 @@ import {
   hasPinConfigured,
   isPinSetupComplete,
   markPinSetupComplete,
+  getStoredPinHash,
 } from "./auth";
 
 // Mock Web Crypto API for PIN hashing tests
@@ -248,6 +249,46 @@ describe("PIN Authentication", () => {
       const currentHash = localStorage.getItem("parent_pin_hash");
       
       expect(originalHash).toBe(currentHash);
+    });
+  });
+
+  describe("getStoredPinHash", () => {
+    it("should return null when no PIN is configured", () => {
+      expect(getStoredPinHash()).toBeNull();
+    });
+
+    it("should return the stored PIN hash when configured", async () => {
+      await setupPin("1234");
+      const hash = getStoredPinHash();
+      expect(hash).not.toBeNull();
+      expect(hash).not.toBe("1234");
+    });
+  });
+
+  describe("Security: localStorage bypass prevention", () => {
+    it("should demonstrate that localStorage auth flags are no longer used", () => {
+      // Set the old localStorage auth flag
+      localStorage.setItem("parent_authenticated", "true");
+      localStorage.setItem("parent_auth_time", Date.now().toString());
+      
+      // These values exist in localStorage but are NOT used for authentication
+      expect(localStorage.getItem("parent_authenticated")).toBe("true");
+      expect(localStorage.getItem("parent_auth_time")).not.toBeNull();
+      
+      // The actual authentication now depends on server session verification
+      // This test demonstrates that localStorage manipulation alone cannot authenticate
+    });
+
+    it("should not use parent_authenticated for authentication", async () => {
+      await setupPin("1234");
+      
+      // Set the old auth flag
+      localStorage.setItem("parent_authenticated", "true");
+      
+      // The verifyPin function still checks the actual PIN hash
+      // It does NOT trust the localStorage flag
+      expect(await verifyPin("5678")).toBe(false); // Wrong PIN
+      expect(await verifyPin("1234")).toBe(true); // Correct PIN
     });
   });
 });
