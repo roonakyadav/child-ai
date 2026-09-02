@@ -13,10 +13,55 @@ const PORT = process.env.PORT || 3001;
 // Trust proxy for rate limiting when behind reverse proxy (Vercel, etc.)
 app.set('trust proxy', 1);
 
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
-}));
+// --- CORS Configuration ---
+
+// Parse ALLOWED_ORIGINS environment variable (comma-separated list)
+function parseAllowedOrigins() {
+  const allowedOriginsEnv = process.env.ALLOWED_ORIGINS;
+  
+  if (!allowedOriginsEnv) {
+    // Development: default to localhost Vite dev server
+    if (process.env.NODE_ENV !== 'production') {
+      return ['http://localhost:5173'];
+    }
+    // Production: fail if not configured
+    return null;
+  }
+  
+  // Split by comma and trim whitespace
+  return allowedOriginsEnv.split(',').map(origin => origin.trim()).filter(origin => origin.length > 0);
+}
+
+const allowedOrigins = parseAllowedOrigins();
+
+// Production validation: fail startup if ALLOWED_ORIGINS not configured
+if (process.env.NODE_ENV === 'production') {
+  if (!allowedOrigins || allowedOrigins.length === 0) {
+    console.error('FATAL: ALLOWED_ORIGINS environment variable must be set in production');
+    console.error('Example: ALLOWED_ORIGINS=https://your-domain.com,https://www.your-domain.com');
+    process.exit(1);
+  }
+}
+
+// CORS origin validation function
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no Origin header (e.g., same-origin, server-to-server, curl)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Check if origin is in the allowlist
+    if (allowedOrigins && allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true // Required for HTTP-only cookies
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
