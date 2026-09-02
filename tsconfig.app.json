@@ -7,8 +7,9 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
 
-    "strict": false,
-    "noImplicitAny": false,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "skipLibCheck": true,
 
     "resolveJsonModule": true,
