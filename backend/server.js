@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const { validateBody } = require('./validation/middleware');
+const { callGroqAPI, ERROR_CODES } = require('./lib/groqHelper');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -205,19 +206,19 @@ app.post('/api/chat', aiLimiter, validateBody('chat'), async (req, res) => {
   const { messages, model } = req.body;
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: model || "llama-3.1-8b-instant",
+    const response = await callGroqAPI({
+      endpoint: 'chat',
       messages,
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      model: model || "llama-3.1-8b-instant",
+      isSafetyEndpoint: false
     });
 
-    res.status(200).json(response.data);
+    res.status(200).json(response);
   } catch (error) {
-    console.error("[Chat] Server error:", error.response?.data || error.message);
+    if (error.isSafeError) {
+      return res.status(500).json({ error: error.message, code: error.code });
+    }
+    console.error("[Chat] Server error:", error.message);
     res.status(500).json({ error: 'AI provider error' });
   }
 });
@@ -251,27 +252,33 @@ app.post('/api/insights', aiLimiter, validateBody('insights'), async (req, res) 
   `;
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: "llama-3.1-8b-instant",
+    const response = await callGroqAPI({
+      endpoint: 'insights',
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Analyze the following child activity summary and provide behavioral insights:\n${JSON.stringify(summary)}` }
+        { role: "user", content: "Generate insights based on this data." }
       ],
-      temperature: 0.4,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      model: "llama-3.1-8b-instant",
+      temperature: 0.3,
+      responseFormat: { type: "json_object" },
+      isSafetyEndpoint: false
     });
 
-    const rawContent = response.data?.choices?.[0]?.message?.content;
-    if (!rawContent) throw new Error("Empty AI response");
-
-    res.status(200).json(JSON.parse(rawContent));
+    const content = response?.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Empty AI response");
+    
+    res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Insights] Server error:", error.response?.data || error.message);
+    if (error.isSafeError) {
+      return res.status(200).json({
+        keyInsight: "AI service temporarily unavailable",
+        smartInsights: [
+          "Please try again later.",
+          "Insights require AI analysis."
+        ]
+      });
+    }
+    console.error("[Insights] Server error:", error.message);
     res.status(200).json({
       keyInsight: "Unable to analyze learning patterns right now.",
       smartInsights: [
@@ -370,27 +377,27 @@ app.post('/api/deep-analysis', aiLimiter, validateBody('deepAnalysis'), async (r
   }
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: "llama-3.3-70b-versatile",
+    const response = await callGroqAPI({
+      endpoint: 'deep-analysis',
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Perform a deep ${insightType} analysis of this insight: "${insight}"` }
+        { role: "user", content: "Perform deep analysis." }
       ],
+      model: "llama-3.3-70b-versatile",
       temperature: 0.2,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      responseFormat: { type: "json_object" },
+      isSafetyEndpoint: false
     });
 
-    const content = response.data?.choices?.[0]?.message?.content;
+    const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Deep Analysis] Server error:", error.response?.data || error.message);
+    if (error.isSafeError) {
+      return res.status(500).json({ error: error.message, code: error.code });
+    }
+    console.error("[Deep Analysis] Server error:", error.message);
     res.status(500).json({ error: 'Failed to perform deep analysis' });
   }
 });
@@ -448,27 +455,27 @@ app.post('/api/analyze-intelligence', aiLimiter, async (req, res) => {
   `;
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: "llama-3.3-70b-versatile",
+    const response = await callGroqAPI({
+      endpoint: 'analyze-intelligence',
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: "Analyze the child's behavior from the provided history." }
       ],
+      model: "llama-3.3-70b-versatile",
       temperature: 0.3,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      responseFormat: { type: "json_object" },
+      isSafetyEndpoint: false
     });
 
-    const content = response.data?.choices?.[0]?.message?.content;
+    const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Intelligence Analysis] Server error:", error.response?.data || error.message);
+    if (error.isSafeError) {
+      return res.status(500).json({ error: error.message, code: error.code });
+    }
+    console.error("[Intelligence Analysis] Server error:", error.message);
     res.status(500).json({ error: 'Failed to perform intelligence analysis' });
   }
 });
@@ -509,22 +516,19 @@ app.post('/api/detect-risk', async (req, res) => {
   `;
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: "llama-3.1-8b-instant",
+    const response = await callGroqAPI({
+      endpoint: 'detect-risk',
       messages: [
         { role: "system", content: systemPrompt.replace("{message}", message) },
         { role: "user", content: "Analyze the safety risk of this message." }
       ],
+      model: "llama-3.1-8b-instant",
       temperature: 0.1,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      responseFormat: { type: "json_object" },
+      isSafetyEndpoint: true
     });
 
-    const content = response.data?.choices?.[0]?.message?.content;
+    const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     const parsed = JSON.parse(content);
@@ -541,7 +545,7 @@ app.post('/api/detect-risk', async (req, res) => {
     
     res.status(200).json(parsed);
   } catch (error) {
-    console.error("[Risk Detection] Server error:", error.response?.data || error.message);
+    console.error("[Risk Detection] Server error:", error.message);
     // Fail-closed: return UNKNOWN when analysis is unavailable
     res.status(200).json({
       status: "unknown",
@@ -595,22 +599,19 @@ app.post('/api/analyze-pattern', async (req, res) => {
   `;
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: "llama-3.3-70b-versatile",
+    const response = await callGroqAPI({
+      endpoint: 'analyze-pattern',
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: "Analyze the behavior pattern in this message sequence." }
       ],
+      model: "llama-3.3-70b-versatile",
       temperature: 0.2,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      responseFormat: { type: "json_object" },
+      isSafetyEndpoint: true
     });
 
-    const content = response.data?.choices?.[0]?.message?.content;
+    const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     const parsed = JSON.parse(content);
@@ -625,7 +626,7 @@ app.post('/api/analyze-pattern', async (req, res) => {
     
     res.status(200).json(parsed);
   } catch (error) {
-    console.error("[Pattern Analysis] Server error:", error.response?.data || error.message);
+    console.error("[Pattern Analysis] Server error:", error.message);
     // Fail-closed: return UNKNOWN when analysis is unavailable
     res.status(200).json({
       pattern_detected: false,
@@ -686,29 +687,36 @@ app.post('/api/decision-engine', aiLimiter, validateBody('decisionEngine'), asyn
   `;
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: "llama-3.3-70b-versatile",
+    const response = await callGroqAPI({
+      endpoint: 'decision-engine',
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: "Analyze metrics and provide high-confidence insights." }
+        { role: "user", content: "Analyze the child's metrics and provide insights." }
       ],
-      temperature: 0.1,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.2,
+      responseFormat: { type: "json_object" },
+      isSafetyEndpoint: false
     });
 
-    const content = response.data?.choices?.[0]?.message?.content;
+    const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Decision Engine] Server error:", error.response?.data || error.message);
+    if (error.isSafeError) {
+      return res.status(200).json({
+        topInsight: "AI service temporarily unavailable",
+        focusArea: { metric: "Attention Span", value: metrics.attentionSpan },
+        trend: "stable",
+        keyChanges: ["Consistent engagement"],
+        actionPlan: "Ask Alex what their favorite thing they learned today was to encourage reflection.",
+        confidence: 75
+      });
+    }
+    console.error("[Decision Engine] Server error:", error.message);
     res.status(200).json({
-      topInsight: `Curiosity score is ${metrics.curiosity}%, demonstrating steady exploration.`,
+      topInsight: "Unable to analyze metrics right now.",
       focusArea: { metric: "Attention Span", value: metrics.attentionSpan },
       trend: "stable",
       keyChanges: ["Consistent engagement"],
@@ -757,27 +765,32 @@ app.post('/api/analyze-engagement', async (req, res) => {
   `;
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: "llama-3.3-70b-versatile",
+    const response = await callGroqAPI({
+      endpoint: 'analyze-engagement',
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: "Analyze engagement data and provide intelligence." }
+        { role: "user", content: "Analyze the engagement data." }
       ],
+      model: "llama-3.3-70b-versatile",
       temperature: 0.2,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      responseFormat: { type: "json_object" },
+      isSafetyEndpoint: false
     });
 
-    const content = response.data?.choices?.[0]?.message?.content;
+    const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Engagement Intelligence] Server error:", error.response?.data || error.message);
+    if (error.isSafeError) {
+      return res.status(200).json({
+        statusReason: "AI service temporarily unavailable",
+        trendExplanation: "Unable to analyze engagement trends at this time.",
+        behaviorPattern: "Analysis unavailable",
+        actionRecommendation: "Try again later for engagement insights."
+      });
+    }
+    console.error("[Engagement Intelligence] Server error:", error.message);
     res.status(200).json({
       statusReason: "Engagement is currently stable with consistent daily usage.",
       trendExplanation: "Usage has been steady throughout the week with no major spikes or drops.",
@@ -823,27 +836,31 @@ app.post('/api/analyze-sentiment', aiLimiter, async (req, res) => {
   `;
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: "llama-3.1-8b-instant",
+    const response = await callGroqAPI({
+      endpoint: 'analyze-sentiment',
       messages: [
         { role: "system", content: systemPrompt.replace("{message}", message) },
         { role: "user", content: "Analyze the sentiment of this message." }
       ],
+      model: "llama-3.1-8b-instant",
       temperature: 0.1,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      responseFormat: { type: "json_object" },
+      isSafetyEndpoint: false
     });
 
-    const content = response.data?.choices?.[0]?.message?.content;
+    const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Sentiment Analysis] Server error:", error.response?.data || error.message);
+    if (error.isSafeError) {
+      return res.status(200).json({
+        score: 70,
+        label: "Neutral",
+        explanation: "AI service temporarily unavailable, defaulting to neutral."
+      });
+    }
+    console.error("[Sentiment Analysis] Server error:", error.message);
     res.status(200).json({
       score: 70,
       label: "Neutral",
@@ -886,22 +903,19 @@ app.post('/api/analyze-early-risk', async (req, res) => {
   `;
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: "llama-3.3-70b-versatile",
+    const response = await callGroqAPI({
+      endpoint: 'analyze-early-risk',
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: "Analyze the early risk in this message sequence." }
       ],
+      model: "llama-3.3-70b-versatile",
       temperature: 0.2,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      responseFormat: { type: "json_object" },
+      isSafetyEndpoint: true
     });
 
-    const content = response.data?.choices?.[0]?.message?.content;
+    const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     const parsed = JSON.parse(content);
@@ -916,7 +930,7 @@ app.post('/api/analyze-early-risk', async (req, res) => {
     
     res.status(200).json(parsed);
   } catch (error) {
-    console.error("[Early Risk Analysis] Server error:", error.response?.data || error.message);
+    console.error("[Early Risk Analysis] Server error:", error.message);
     // Fail-closed: return UNKNOWN when analysis is unavailable
     res.status(200).json({
       early_risk: false,
@@ -1019,28 +1033,28 @@ app.post('/api/generate-full-report', aiLimiter, validateBody('generateFullRepor
   `;
 
   try {
-    const response = await axios.post(GROQ_API_URL, {
-      model: "llama-3.3-70b-versatile",
+    const response = await callGroqAPI({
+      endpoint: 'generate-full-report',
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: "Generate the full developmental report based on the provided extracted data metrics." }
+        { role: "user", content: "Generate the full developmental report." }
       ],
+      model: "llama-3.3-70b-versatile",
       temperature: 0.3,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      }
+      responseFormat: { type: "json_object" },
+      isSafetyEndpoint: false
     });
 
-    const content = response.data?.choices?.[0]?.message?.content;
+    const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty AI response");
     
     res.status(200).json(JSON.parse(content));
   } catch (error) {
-    console.error("[Full Report Analysis] Server error:", error.response?.data || error.message);
-    res.status(500).json({ error: `Failed to generate report: ${error.message}` });
+    if (error.isSafeError) {
+      return res.status(500).json({ error: error.message, code: error.code });
+    }
+    console.error("[Full Report] Server error:", error.message);
+    res.status(500).json({ error: 'Failed to generate report' });
   }
 });
 
