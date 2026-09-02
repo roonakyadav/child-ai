@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, ShieldCheck, AlertCircle } from "lucide-react";
-import { verifyPin } from "@/lib/auth";
+import { verifyPin, hasPinConfigured } from "@/lib/auth";
 
 export default function PinEntry() {
-  const [pin, setPin] = useState(["", "", "", ""]);
+  const [pin, setPin] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
@@ -14,7 +14,16 @@ export default function PinEntry() {
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
   ];
+
+  // Redirect to PIN setup if no PIN is configured
+  useEffect(() => {
+    if (!hasPinConfigured()) {
+      navigate("/parent/setup");
+    }
+  }, [navigate]);
 
   // Auto-focus first box on mount
   useEffect(() => {
@@ -29,7 +38,7 @@ export default function PinEntry() {
     setPin(newPin);
 
     // Move to next box if value entered
-    if (value && index < 3) {
+    if (value && index < 5) {
       inputRefs[index + 1].current?.focus();
     }
   };
@@ -40,10 +49,10 @@ export default function PinEntry() {
     }
   };
 
-  const handleSubmit = async (e?: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
     const pinString = pin.join("");
-    if (pinString.length !== 4) return;
+    if (pinString.length < 4 || pinString.length > 6) return;
 
     setIsSubmitting(true);
     const isValid = await verifyPin(pinString);
@@ -58,18 +67,19 @@ export default function PinEntry() {
       // Shake animation effect
       setTimeout(() => {
         setError(false);
-        setPin(["", "", "", ""]);
+        setPin(["", "", "", "", "", ""]);
         inputRefs[0].current?.focus();
       }, 600);
     }
-  };
+  }, [pin, navigate]);
 
-  // Auto-submit when 4th digit is entered
+  // Auto-submit when all entered digits are filled (4-6 digits)
   useEffect(() => {
-    if (pin.every(digit => digit !== "")) {
+    const pinString = pin.join("");
+    if (pinString.length >= 4 && pin.every(digit => digit !== "")) {
       handleSubmit();
     }
-  }, [pin]);
+  }, [pin, handleSubmit]);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f8faff] selection:bg-primary/20">
@@ -114,7 +124,7 @@ export default function PinEntry() {
 
           <form onSubmit={handleSubmit} className="space-y-10">
             {/* STEP 5: PIN INPUT (CLEAN / GREEN FOCUS) */}
-            <div className="flex justify-between gap-4">
+            <div className="flex justify-between gap-3">
               {pin.map((digit, index) => (
                 <input
                   key={index}
@@ -124,7 +134,7 @@ export default function PinEntry() {
                   onChange={(e) => handleChange(index, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(index, e)}
                   maxLength={1}
-                  className={`h-16 w-14 rounded-2xl border text-center text-2xl font-black outline-none transition-all duration-200 ${
+                  className={`h-16 w-12 rounded-2xl border text-center text-2xl font-black outline-none transition-all duration-200 ${
                     error 
                       ? "border-destructive bg-destructive/5 text-destructive shadow-[0_0_15px_rgba(239,68,68,0.1)]" 
                       : "border-primary/10 bg-primary/5 text-primary focus:border-primary focus:ring-8 focus:ring-primary/10"
@@ -162,16 +172,6 @@ export default function PinEntry() {
             </div>
           </form>
         </div>
-
-        {/* Clearly visible helper text */}
-        <motion.p 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="mt-10 text-center text-[14px] font-black text-primary uppercase tracking-[0.2em] bg-white/80 py-4 rounded-[2rem] border border-primary/20 shadow-soft backdrop-blur-sm"
-        >
-          Default Gateway: <span className="text-primary underline underline-offset-4 decoration-4">1234</span>
-        </motion.p>
       </motion.div>
     </div>
   );

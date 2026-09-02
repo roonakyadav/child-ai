@@ -65,9 +65,6 @@ export interface AppConfig {
       mode: string;
     };
   };
-  auth: {
-    defaultPin: string;
-  };
   api: {
     baseUrl: string;
     chat: string;
@@ -201,9 +198,6 @@ const DEFAULT_CONFIG: AppConfig = {
       restrictionEnabled: true,
       mode: "balanced",
     },
-  },
-  auth: {
-    defaultPin: "1234",
   },
   api: {
     baseUrl: API_BASE_URL,

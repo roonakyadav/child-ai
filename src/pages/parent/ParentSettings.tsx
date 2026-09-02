@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { KeyRound, Trash2, ShieldCheck, Bell, FileDown, Loader2, Sparkles, CheckCircle } from "lucide-react";
-import { isStrictModeEnabled, setStrictMode as saveStrictMode, updatePin } from "@/lib/auth";
+import { KeyRound, Trash2, ShieldCheck, Bell, FileDown, Loader2, Sparkles, CheckCircle, AlertCircle } from "lucide-react";
+import { isStrictModeEnabled, setStrictMode as saveStrictMode, updatePin, isValidPinFormat } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { gatherAllAppData, generatePDFReport, ReportData } from "@/lib/reportService";
 import { getConfig } from "@/lib/configStore";
@@ -12,6 +12,8 @@ const ParentSettings = () => {
   const [notifications, setNotifications] = useState(true);
   const [showPinChange, setShowPinChange] = useState(false);
   const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [pinError, setPinError] = useState("");
   const [pinSaved, setPinSaved] = useState(false);
 
   // Report states
@@ -101,14 +103,30 @@ const ParentSettings = () => {
   };
 
   const handleSavePin = async () => {
-    if (newPin.length === 4) {
-      updatePin(newPin);
+    setPinError("");
+    
+    if (!isValidPinFormat(newPin)) {
+      setPinError("PIN must be 4-6 digits");
+      return;
+    }
+    
+    if (newPin !== confirmPin) {
+      setPinError("PINs do not match");
+      return;
+    }
+    
+    try {
+      await updatePin(newPin);
       setPinSaved(true);
       setTimeout(() => {
         setShowPinChange(false);
         setNewPin("");
+        setConfirmPin("");
+        setPinError("");
         setPinSaved(false);
       }, 1500);
+    } catch (error) {
+      setPinError("Failed to update PIN. Please try again.");
     }
   };
 
@@ -297,24 +315,50 @@ const ParentSettings = () => {
           animate={{ opacity: 1, scale: 1 }}
           className="rounded-3xl bg-gradient-to-br from-primary/10 to-accent/5 p-8 shadow-soft border border-primary/10"
         >
-          <h3 className="mb-4 text-sm font-black text-foreground uppercase tracking-widest text-center">Enter New 4-Digit PIN</h3>
-          <div className="flex flex-col sm:flex-row gap-4 max-w-sm mx-auto">
+          <h3 className="mb-4 text-sm font-black text-foreground uppercase tracking-widest text-center">Change PIN</h3>
+          
+          {/* Error Message */}
+          <AnimatePresence>
+            {pinError && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="mb-4 rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-center"
+              >
+                <div className="flex items-center justify-center gap-2 text-xs font-bold text-destructive">
+                  <AlertCircle className="h-3 w-3" />
+                  {pinError}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="space-y-4 max-w-sm mx-auto">
             <input
               type="password"
-              maxLength={4}
+              maxLength={6}
               value={newPin}
               onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
-              placeholder="••••"
-              className="flex-1 rounded-2xl border border-primary/20 bg-white px-6 py-4 text-center text-2xl font-black tracking-[1em] outline-none ring-primary/20 focus:ring-4 transition-all"
+              placeholder="New PIN (4-6 digits)"
+              className="w-full rounded-2xl border border-primary/20 bg-white px-6 py-4 text-center text-2xl font-black tracking-[0.5em] outline-none ring-primary/20 focus:ring-4 transition-all"
+            />
+            <input
+              type="password"
+              maxLength={6}
+              value={confirmPin}
+              onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
+              placeholder="Confirm PIN"
+              className="w-full rounded-2xl border border-primary/20 bg-white px-6 py-4 text-center text-2xl font-black tracking-[0.5em] outline-none ring-primary/20 focus:ring-4 transition-all"
             />
             <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={handleSavePin}
-              disabled={newPin.length !== 4}
-              className="rounded-2xl gradient-hero px-8 py-4 text-xs font-black uppercase tracking-widest text-white shadow-soft disabled:opacity-40 transition-all hover:shadow-glow"
+              disabled={!newPin || !confirmPin || pinSaved}
+              className="w-full rounded-2xl gradient-hero px-8 py-4 text-xs font-black uppercase tracking-widest text-white shadow-soft disabled:opacity-40 transition-all hover:shadow-glow"
             >
-              {pinSaved ? "✓ Saved" : "Update"}
+              {pinSaved ? "✓ Saved" : "Update PIN"}
             </motion.button>
           </div>
         </motion.div>

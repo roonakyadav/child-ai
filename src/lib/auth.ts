@@ -5,13 +5,11 @@
  * Handles secure PIN storage using simple hashing and session management.
  */
 
-import { getConfig } from "./configStore";
-
 const PIN_STORAGE_KEY = "parent_pin_hash";
-const DEFAULT_PIN = getConfig().auth.defaultPin; // Default for initial setup
+const PIN_SETUP_KEY = "parent_pin_setup_complete";
 
 /**
- * Simple hashing function for the 4-digit PIN
+ * Simple hashing function for the PIN
  * Note: While not enterprise-grade, it's better than plain text for local storage.
  */
 async function hashPin(pin: string): Promise<string> {
@@ -22,21 +20,56 @@ async function hashPin(pin: string): Promise<string> {
 }
 
 /**
- * Initialize a default PIN if none exists
+ * Check if a PIN has been configured
  */
-export async function ensurePinExists(): Promise<void> {
-  if (!localStorage.getItem(PIN_STORAGE_KEY)) {
-    const defaultHash = await hashPin(DEFAULT_PIN);
-    localStorage.setItem(PIN_STORAGE_KEY, defaultHash);
+export function hasPinConfigured(): boolean {
+  return localStorage.getItem(PIN_STORAGE_KEY) !== null;
+}
+
+/**
+ * Check if PIN setup is complete (for first-run flow)
+ */
+export function isPinSetupComplete(): boolean {
+  return localStorage.getItem(PIN_SETUP_KEY) === "true";
+}
+
+/**
+ * Complete the PIN setup process
+ */
+export function markPinSetupComplete(): void {
+  localStorage.setItem(PIN_SETUP_KEY, "true");
+}
+
+/**
+ * Set up a new PIN (for first-time setup)
+ */
+export async function setupPin(pin: string): Promise<void> {
+  if (!isValidPinFormat(pin)) {
+    throw new Error("PIN must be 4-6 digits");
   }
+  
+  const hash = await hashPin(pin);
+  localStorage.setItem(PIN_STORAGE_KEY, hash);
+  markPinSetupComplete();
+}
+
+/**
+ * Validate PIN format (4-6 digits)
+ */
+export function isValidPinFormat(pin: string): boolean {
+  return /^\d{4,6}$/.test(pin);
 }
 
 /**
  * Verify if the entered PIN matches the stored hash
  */
 export async function verifyPin(enteredPin: string): Promise<boolean> {
-  await ensurePinExists();
   const storedHash = localStorage.getItem(PIN_STORAGE_KEY);
+  
+  if (!storedHash) {
+    return false; // No PIN configured
+  }
+  
   const enteredHash = await hashPin(enteredPin);
   return storedHash === enteredHash;
 }
@@ -45,7 +78,9 @@ export async function verifyPin(enteredPin: string): Promise<boolean> {
  * Update the stored PIN hash
  */
 export async function updatePin(newPin: string): Promise<void> {
-  if (newPin.length !== 4) throw new Error("PIN must be 4 digits");
+  if (!isValidPinFormat(newPin)) {
+    throw new Error("PIN must be 4-6 digits");
+  }
   const newHash = await hashPin(newPin);
   localStorage.setItem(PIN_STORAGE_KEY, newHash);
 }

@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/index";
 import NotFound from "./pages/NotFound";
 import PinEntry from "./pages/parent/PinEntry";
+import PinSetup from "./pages/parent/PinSetup";
 import ParentLayout from "./components/ParentLayout";
 import DashboardOverview from "./pages/parent/DashboardOverview";
 import ActivityFeed from "./pages/parent/ActivityFeed";
@@ -36,6 +37,7 @@ const App = () => (
           
           {/* Parent Auth Entry */}
           <Route path="/parent" element={<PinEntry />} />
+          <Route path="/parent/setup" element={<PinSetup />} />
           
           {/* Protected Parent Dashboard Routes */}
           <Route
