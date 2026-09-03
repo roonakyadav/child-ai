@@ -18,7 +18,10 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "vitest": "^1.6.0",
-    "supertest": "^6.3.4"
+    "supertest": "^6.3.4",
+    "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }
