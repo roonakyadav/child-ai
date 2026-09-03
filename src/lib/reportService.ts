@@ -310,7 +310,7 @@ export async function generatePDFReport(
         const splitContent = doc.splitTextToSize(content, pageWidth - margin * 2);
         
         // Handle pagination for long content
-        for (let line of splitContent) {
+        for (const line of splitContent) {
           if (currentY > pageHeight - 20) {
             addNewPage();
           }

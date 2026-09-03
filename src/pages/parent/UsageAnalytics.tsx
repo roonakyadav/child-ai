@@ -76,7 +76,7 @@ const UsageAnalytics = () => {
 
   // Find peak hour
   const maxHourCount = Math.max(...hours);
-  let peakHour = hours.indexOf(maxHourCount);
+  const peakHour = hours.indexOf(maxHourCount);
 
   // Convert to time range (e.g., "3–5 PM")
   function formatTimeRange(hour: number): string {
