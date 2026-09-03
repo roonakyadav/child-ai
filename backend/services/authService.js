@@ -1,6 +1,6 @@
 /**
  * Authentication Service
- * Handles server-side session management for parent authentication
+ * Handles server-side session management and PIN storage for parent authentication
  */
 
 const crypto = require('crypto');
@@ -8,6 +8,9 @@ const { SESSION_EXPIRY_MS } = require('../config');
 
 // In-memory session storage
 const sessions = new Map();
+
+// In-memory PIN hash storage (single parent PIN for this application)
+let parentPinHash = null;
 
 // Clean expired sessions periodically
 setInterval(() => {
@@ -85,10 +88,45 @@ function hashPin(pin) {
   return crypto.createHash('sha256').update(pin).digest('hex');
 }
 
+/**
+ * Set parent PIN hash on server
+ */
+function setParentPinHash(pin) {
+  parentPinHash = hashPin(pin);
+}
+
+/**
+ * Get parent PIN hash status (whether PIN is configured)
+ */
+function hasParentPin() {
+  return parentPinHash !== null;
+}
+
+/**
+ * Verify PIN against server-stored hash
+ */
+function verifyPinHash(pin) {
+  if (!parentPinHash) {
+    return false;
+  }
+  return hashPin(pin) === parentPinHash;
+}
+
+/**
+ * Update parent PIN hash on server
+ */
+function updateParentPinHash(newPin) {
+  parentPinHash = hashPin(newPin);
+}
+
 module.exports = {
   createSession,
   getSession,
   deleteSession,
   hashPin,
+  setParentPinHash,
+  hasParentPin,
+  verifyPinHash,
+  updateParentPinHash,
   SESSION_EXPIRY_MS
 };

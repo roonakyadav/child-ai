@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Lock, ShieldCheck, AlertCircle } from "lucide-react";
 import { loginWithPin, hasPinConfigured } from "@/lib/auth";
 
@@ -8,6 +8,7 @@ export default function PinEntry() {
   const [pin, setPin] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const inputRefs = [
     useRef<HTMLInputElement>(null),
@@ -20,15 +21,22 @@ export default function PinEntry() {
 
   // Redirect to PIN setup if no PIN is configured
   useEffect(() => {
-    if (!hasPinConfigured()) {
-      navigate("/parent/setup");
-    }
+    const checkPinStatus = async () => {
+      const configured = await hasPinConfigured();
+      if (!configured) {
+        navigate("/parent/setup");
+      }
+      setIsLoading(false);
+    };
+    checkPinStatus();
   }, [navigate]);
 
-  // Auto-focus first box on mount
+  // Auto-focus first box on mount (after loading completes)
   useEffect(() => {
-    inputRefs[0].current?.focus();
-  }, []);
+    if (!isLoading) {
+      inputRefs[0].current?.focus();
+    }
+  }, [isLoading]);
 
   const handleChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;

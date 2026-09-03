@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, ShieldCheck, AlertCircle, ArrowRight } from "lucide-react";
-import { setupPin, isValidPinFormat, markPinSetupComplete, loginWithPin } from "@/lib/auth";
+import { setupPin, isValidPinFormat, loginWithPin } from "@/lib/auth";
 
 type SetupStep = "create" | "confirm" | "success";
 

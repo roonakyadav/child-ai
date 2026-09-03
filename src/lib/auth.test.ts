@@ -1,46 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   setupPin,
-  verifyPin,
-  updatePin,
   isValidPinFormat,
   hasPinConfigured,
-  isPinSetupComplete,
-  markPinSetupComplete,
-  getStoredPinHash,
+  loginWithPin,
+  logout,
+  updatePin,
 } from "./auth";
 
-// Mock Web Crypto API for PIN hashing tests
-const mockDigest = vi.fn();
-Object.defineProperty(global, "crypto", {
-  writable: true,
-  value: {
-    subtle: {
-      digest: mockDigest,
-    },
-  },
-});
+// Mock API client for all auth tests
+vi.mock("./apiClient", () => ({
+  post: vi.fn(),
+  get: vi.fn(),
+}));
 
 describe("PIN Authentication", () => {
   beforeEach(() => {
     // Clear localStorage before each test
     localStorage.clear();
-    
-    // Reset crypto mock
-    mockDigest.mockReset();
-    
-    // Simple mock hash for testing - not cryptographically secure
-    mockDigest.mockImplementation(async (algorithm: string, data: Uint8Array) => {
-      const hash = Array.from(data).reduce((acc, byte) => acc + byte, 0);
-      const hashBuffer = new Uint8Array([hash % 256, (hash >> 8) % 256, (hash >> 16) % 256, (hash >> 24) % 256]);
-      return hashBuffer;
-    });
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
     // Clean up after each test
     localStorage.clear();
-    vi.restoreAllMocks();
   });
 
   describe("isValidPinFormat", () => {
@@ -52,72 +35,55 @@ describe("PIN Authentication", () => {
 
     it("should accept 5-digit PINs", () => {
       expect(isValidPinFormat("12345")).toBe(true);
-      expect(isValidPinFormat("00000")).toBe(true);
     });
 
     it("should accept 6-digit PINs", () => {
       expect(isValidPinFormat("123456")).toBe(true);
       expect(isValidPinFormat("000000")).toBe(true);
+      expect(isValidPinFormat("999999")).toBe(true);
     });
 
-    it("should reject PINs shorter than 4 digits", () => {
+    it("should reject PINs with less than 4 digits", () => {
       expect(isValidPinFormat("123")).toBe(false);
       expect(isValidPinFormat("12")).toBe(false);
       expect(isValidPinFormat("1")).toBe(false);
       expect(isValidPinFormat("")).toBe(false);
     });
 
-    it("should reject PINs longer than 6 digits", () => {
+    it("should reject PINs with more than 6 digits", () => {
       expect(isValidPinFormat("1234567")).toBe(false);
       expect(isValidPinFormat("12345678")).toBe(false);
     });
 
-    it("should reject non-numeric PINs", () => {
+    it("should reject PINs with non-digit characters", () => {
       expect(isValidPinFormat("abcd")).toBe(false);
       expect(isValidPinFormat("12a4")).toBe(false);
-      expect(isValidPinFormat("1234a")).toBe(false);
+      expect(isValidPinFormat("12 34")).toBe(false);
+      expect(isValidPinFormat("12-34")).toBe(false);
     });
 
     it("should reject PINs with special characters", () => {
+      expect(isValidPinFormat("12!4")).toBe(false);
       expect(isValidPinFormat("12@4")).toBe(false);
       expect(isValidPinFormat("12#4")).toBe(false);
-      expect(isValidPinFormat("12 4")).toBe(false);
-    });
-  });
-
-  describe("hasPinConfigured", () => {
-    it("should return false when no PIN is configured", () => {
-      expect(hasPinConfigured()).toBe(false);
-    });
-
-    it("should return true when PIN is configured", async () => {
-      await setupPin("1234");
-      expect(hasPinConfigured()).toBe(true);
-    });
-  });
-
-  describe("isPinSetupComplete", () => {
-    it("should return false when setup is not complete", () => {
-      expect(isPinSetupComplete()).toBe(false);
-    });
-
-    it("should return true when setup is marked complete", () => {
-      markPinSetupComplete();
-      expect(isPinSetupComplete()).toBe(true);
     });
   });
 
   describe("setupPin", () => {
-    it("should successfully set up a 4-digit PIN", async () => {
-      await setupPin("1234");
-      expect(hasPinConfigured()).toBe(true);
-      expect(isPinSetupComplete()).toBe(true);
+    it("should set up a valid 4-digit PIN", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockResolvedValue({ success: true });
+
+      await expect(setupPin("1234")).resolves.not.toThrow();
+      expect(vi.mocked(post)).toHaveBeenCalledWith('/api/auth/parent/setup', { pin: "1234" });
     });
 
-    it("should successfully set up a 6-digit PIN", async () => {
-      await setupPin("123456");
-      expect(hasPinConfigured()).toBe(true);
-      expect(isPinSetupComplete()).toBe(true);
+    it("should set up a valid 6-digit PIN", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockResolvedValue({ success: true });
+
+      await expect(setupPin("123456")).resolves.not.toThrow();
+      expect(vi.mocked(post)).toHaveBeenCalledWith('/api/auth/parent/setup', { pin: "123456" });
     });
 
     it("should reject invalid PIN format", async () => {
@@ -126,169 +92,158 @@ describe("PIN Authentication", () => {
       await expect(setupPin("abcd")).rejects.toThrow("PIN must be 4-6 digits");
     });
 
-    it("should not configure PIN if format is invalid", async () => {
-      try {
-        await setupPin("123");
-      } catch (e) {
-        // Expected to throw
-      }
-      expect(hasPinConfigured()).toBe(false);
+    it("should throw error on API failure", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockRejectedValue(new Error("Network error"));
+
+      await expect(setupPin("1234")).rejects.toThrow("Failed to set up PIN");
     });
   });
 
-  describe("verifyPin", () => {
-    it("should return false when no PIN is configured", async () => {
-      const result = await verifyPin("1234");
-      expect(result).toBe(false);
-    });
+  describe("hasPinConfigured", () => {
+    it("should return true when server reports PIN configured", async () => {
+      const { get } = await import("./apiClient");
+      vi.mocked(get).mockResolvedValue({ configured: true });
 
-    it("should return true for correct PIN", async () => {
-      await setupPin("1234");
-      const result = await verifyPin("1234");
+      const result = await hasPinConfigured();
       expect(result).toBe(true);
+      expect(vi.mocked(get)).toHaveBeenCalledWith('/api/auth/parent/status');
     });
 
-    it("should return false for incorrect PIN", async () => {
-      await setupPin("1234");
-      const result = await verifyPin("5678");
+    it("should return false when server reports PIN not configured", async () => {
+      const { get } = await import("./apiClient");
+      vi.mocked(get).mockResolvedValue({ configured: false });
+
+      const result = await hasPinConfigured();
       expect(result).toBe(false);
     });
 
-    it("should return false for PIN with wrong length", async () => {
-      await setupPin("1234");
-      const result = await verifyPin("123");
+    it("should return false on API error", async () => {
+      const { get } = await import("./apiClient");
+      vi.mocked(get).mockRejectedValue(new Error("Network error"));
+
+      const result = await hasPinConfigured();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("loginWithPin", () => {
+    it("should login with valid PIN", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockResolvedValue({ success: true });
+
+      const result = await loginWithPin("1234");
+      expect(result).toBe(true);
+      expect(vi.mocked(post)).toHaveBeenCalledWith('/api/auth/parent/login', { pin: "1234" });
+    });
+
+    it("should reject invalid PIN format", async () => {
+      await expect(loginWithPin("123")).rejects.toThrow("PIN must be 4-6 digits");
+      await expect(loginWithPin("1234567")).rejects.toThrow("PIN must be 4-6 digits");
+    });
+
+    it("should return false on authentication failure", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockResolvedValue({ success: false });
+
+      const result = await loginWithPin("1234");
       expect(result).toBe(false);
     });
 
-    it("should verify 6-digit PIN correctly", async () => {
-      await setupPin("123456");
-      expect(await verifyPin("123456")).toBe(true);
-      expect(await verifyPin("123455")).toBe(false);
+    it("should return false on API error", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockRejectedValue(new Error("Network error"));
+
+      const result = await loginWithPin("1234");
+      expect(result).toBe(false);
     });
   });
 
   describe("updatePin", () => {
-    it("should successfully update an existing PIN", async () => {
-      await setupPin("1234");
-      await updatePin("5678");
-      
-      expect(await verifyPin("5678")).toBe(true);
-      expect(await verifyPin("1234")).toBe(false);
+    it("should update PIN on server", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockResolvedValue({ success: true });
+
+      await expect(updatePin("5678")).resolves.not.toThrow();
+      expect(vi.mocked(post)).toHaveBeenCalledWith('/api/auth/parent/update', { pin: "5678" });
     });
 
-    it("should reject invalid PIN format on update", async () => {
-      await setupPin("1234");
+    it("should reject invalid PIN format", async () => {
       await expect(updatePin("123")).rejects.toThrow("PIN must be 4-6 digits");
+      await expect(updatePin("1234567")).rejects.toThrow("PIN must be 4-6 digits");
     });
 
-    it("should allow updating from 4-digit to 6-digit PIN", async () => {
-      await setupPin("1234");
-      await updatePin("123456");
-      
-      expect(await verifyPin("123456")).toBe(true);
-    });
+    it("should throw error on API failure", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockRejectedValue(new Error("Network error"));
 
-    it("should allow updating from 6-digit to 4-digit PIN", async () => {
-      await setupPin("123456");
-      await updatePin("1234");
-      
-      expect(await verifyPin("1234")).toBe(true);
+      await expect(updatePin("1234")).rejects.toThrow("Failed to update PIN");
     });
   });
 
-  describe("PIN Security", () => {
-    it("should not store plaintext PIN", async () => {
-      await setupPin("1234");
-      const storedData = localStorage.getItem("parent_pin_hash");
-      
-      expect(storedData).not.toBeNull();
-      expect(storedData).not.toBe("1234");
-      expect(storedData).not.toContain("1234");
+  describe("logout", () => {
+    it("should call logout endpoint and clear stale localStorage", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockResolvedValue({});
+
+      // Set stale localStorage values (from old implementation)
+      localStorage.setItem("parent_pin_hash", "stale_hash");
+      localStorage.setItem("parent_pin_setup_complete", "true");
+
+      await logout();
+
+      expect(vi.mocked(post)).toHaveBeenCalledWith('/api/auth/parent/logout', {});
+      expect(localStorage.getItem("parent_pin_hash")).toBeNull();
+      expect(localStorage.getItem("parent_pin_setup_complete")).toBeNull();
     });
 
-    it("should store different hashes for different PINs", async () => {
-      await setupPin("1234");
-      const hash1 = localStorage.getItem("parent_pin_hash");
-      
-      localStorage.clear();
-      await setupPin("5678");
-      const hash2 = localStorage.getItem("parent_pin_hash");
-      
-      expect(hash1).not.toBe(hash2);
-    });
+    it("should handle API error gracefully", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockRejectedValue(new Error("Network error"));
 
-    it("should store same hash for same PIN", async () => {
-      await setupPin("1234");
-      const hash1 = localStorage.getItem("parent_pin_hash");
-      
-      localStorage.clear();
-      await setupPin("1234");
-      const hash2 = localStorage.getItem("parent_pin_hash");
-      
-      expect(hash1).toBe(hash2);
+      // Set stale localStorage values
+      localStorage.setItem("parent_pin_hash", "stale_hash");
+
+      await expect(logout()).resolves.not.toThrow();
+      expect(localStorage.getItem("parent_pin_hash")).toBeNull();
     });
   });
 
-  describe("Existing PIN Preservation", () => {
-    it("should not override existing PIN on setup check", async () => {
+  describe("Security: No localStorage PIN storage", () => {
+    it("should never write PIN hash to localStorage during setup", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockResolvedValue({ success: true });
+
       await setupPin("1234");
-      const originalHash = localStorage.getItem("parent_pin_hash");
-      
-      // Call hasPinConfigured should not change the PIN
-      hasPinConfigured();
-      const currentHash = localStorage.getItem("parent_pin_hash");
-      
-      expect(originalHash).toBe(currentHash);
+
+      // Verify no PIN-related keys in localStorage
+      expect(localStorage.getItem("parent_pin_hash")).toBeNull();
+      expect(localStorage.getItem("parent_pin_setup_complete")).toBeNull();
     });
 
-    it("should preserve existing PIN during verification", async () => {
-      await setupPin("1234");
-      const originalHash = localStorage.getItem("parent_pin_hash");
-      
-      await verifyPin("5678"); // Wrong PIN
-      const currentHash = localStorage.getItem("parent_pin_hash");
-      
-      expect(originalHash).toBe(currentHash);
-    });
-  });
+    it("should never write PIN hash to localStorage during login", async () => {
+      const { post } = await import("./apiClient");
+      vi.mocked(post).mockResolvedValue({ success: true });
 
-  describe("getStoredPinHash", () => {
-    it("should return null when no PIN is configured", () => {
-      expect(getStoredPinHash()).toBeNull();
+      await loginWithPin("1234");
+
+      // Verify no PIN-related keys in localStorage
+      expect(localStorage.getItem("parent_pin_hash")).toBeNull();
+      expect(localStorage.getItem("parent_pin_setup_complete")).toBeNull();
     });
 
-    it("should return the stored PIN hash when configured", async () => {
-      await setupPin("1234");
-      const hash = getStoredPinHash();
-      expect(hash).not.toBeNull();
-      expect(hash).not.toBe("1234");
-    });
-  });
+    it("should obtain PIN status from server, not localStorage", async () => {
+      const { get } = await import("./apiClient");
+      vi.mocked(get).mockResolvedValue({ configured: true });
 
-  describe("Security: localStorage bypass prevention", () => {
-    it("should demonstrate that localStorage auth flags are no longer used", () => {
-      // Set the old localStorage auth flag
-      localStorage.setItem("parent_authenticated", "true");
-      localStorage.setItem("parent_auth_time", Date.now().toString());
-      
-      // These values exist in localStorage but are NOT used for authentication
-      expect(localStorage.getItem("parent_authenticated")).toBe("true");
-      expect(localStorage.getItem("parent_auth_time")).not.toBeNull();
-      
-      // The actual authentication now depends on server session verification
-      // This test demonstrates that localStorage manipulation alone cannot authenticate
-    });
+      // Set stale localStorage value
+      localStorage.setItem("parent_pin_hash", "stale_hash");
 
-    it("should not use parent_authenticated for authentication", async () => {
-      await setupPin("1234");
-      
-      // Set the old auth flag
-      localStorage.setItem("parent_authenticated", "true");
-      
-      // The verifyPin function still checks the actual PIN hash
-      // It does NOT trust the localStorage flag
-      expect(await verifyPin("5678")).toBe(false); // Wrong PIN
-      expect(await verifyPin("1234")).toBe(true); // Correct PIN
+      const result = await hasPinConfigured();
+
+      // Should use server response, not localStorage
+      expect(result).toBe(true);
+      expect(vi.mocked(get)).toHaveBeenCalledWith('/api/auth/parent/status');
     });
   });
 });

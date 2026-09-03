@@ -1,22 +1,58 @@
 /**
  * Authentication Routes
- * Handles parent login, session verification, and logout
+ * Handles parent login, session verification, logout, and PIN setup
  */
 
 const express = require('express');
 const router = express.Router();
 const { generalLimiter } = require('../middleware/rateLimit');
 const { validateBody } = require('../validation/middleware');
-const { createSession, getSession, deleteSession, hashPin, SESSION_EXPIRY_MS } = require('../services/authService');
+const { createSession, getSession, deleteSession, hashPin, setParentPinHash, hasParentPin, verifyPinHash, updateParentPinHash, SESSION_EXPIRY_MS } = require('../services/authService');
+
+// POST /api/auth/parent/setup
+router.post('/parent/setup', generalLimiter, validateBody('login'), async (req, res) => {
+  const { pin } = req.body;
+
+  // Validate PIN format (4-6 digits)
+  if (!/^\d{4,6}$/.test(pin)) {
+    return res.status(400).json({ error: 'PIN must be 4-6 digits' });
+  }
+
+  // Store PIN hash on server
+  setParentPinHash(pin);
+
+  res.status(200).json({ success: true });
+});
+
+// GET /api/auth/parent/status
+router.get('/parent/status', generalLimiter, (req, res) => {
+  const pinConfigured = hasParentPin();
+  res.status(200).json({ configured: pinConfigured });
+});
+
+// POST /api/auth/parent/update
+router.post('/parent/update', generalLimiter, validateBody('login'), async (req, res) => {
+  const { pin } = req.body;
+
+  // Validate PIN format (4-6 digits)
+  if (!/^\d{4,6}$/.test(pin)) {
+    return res.status(400).json({ error: 'PIN must be 4-6 digits' });
+  }
+
+  // Update PIN hash on server
+  updateParentPinHash(pin);
+
+  res.status(200).json({ success: true });
+});
 
 // POST /api/auth/parent/login
 router.post('/parent/login', generalLimiter, validateBody('login'), async (req, res) => {
-  const { pin, storedPinHash } = req.body;
+  const { pin } = req.body;
 
-  // Hash the PIN for comparison (same as frontend)
-  const pinHash = hashPin(pin);
+  // Verify PIN against server-stored hash
+  const isValid = verifyPinHash(pin);
 
-  if (pinHash !== storedPinHash) {
+  if (!isValid) {
     return res.status(401).json({ error: 'Invalid PIN' });
   }
 
