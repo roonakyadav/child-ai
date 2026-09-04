@@ -42,11 +42,33 @@ function parseAllowedOrigins() {
 
 const allowedOrigins = parseAllowedOrigins();
 
+const path = require('path');
+const fs = require('fs');
+
+// Storage configuration
+const CONFIG_STORE_PATH = process.env.CONFIG_STORE_PATH || path.join(__dirname, '../data/parentConfig.json');
+
 // Production validation
 if (NODE_ENV === 'production') {
   if (!allowedOrigins || allowedOrigins.length === 0) {
     console.error('FATAL: ALLOWED_ORIGINS environment variable must be set in production');
     console.error('Example: ALLOWED_ORIGINS=https://your-domain.com,https://www.your-domain.com');
+    process.exit(1);
+  }
+
+  if (!process.env.CONFIG_STORE_PATH) {
+    console.error('FATAL: CONFIG_STORE_PATH environment variable must be set in production');
+    console.error('Example: CONFIG_STORE_PATH=/var/data/child-ai/parentConfig.json');
+    process.exit(1);
+  }
+
+  try {
+    const dir = path.dirname(CONFIG_STORE_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  } catch (error) {
+    console.error('FATAL: Failed to access or create CONFIG_STORE_PATH directory in production:', error.message);
     process.exit(1);
   }
 }
@@ -63,5 +85,6 @@ module.exports = {
   GROQ_API_KEY,
   GROQ_API_URL,
   GROQ_TIMEOUT_MS,
-  allowedOrigins
+  allowedOrigins,
+  CONFIG_STORE_PATH
 };

@@ -47,6 +47,7 @@ import { injectSystemMessage } from "@/lib/intervention/injectionService";
 import { saveIntervention, getInterventions } from "@/lib/intervention/interventionService";
 import { askParentAssistant } from "@/lib/groq";
 import { getConfig } from "@/lib/configStore";
+import { migrateLegacyConfigToServer, updateServerParentConfig } from "@/lib/parentConfigClient";
 
 interface AIInsights {
   keyInsight: string;
@@ -67,6 +68,9 @@ const DashboardOverview = () => {
   
   // Update activities on mount and periodically
   useEffect(() => {
+    // Attempt one-time legacy configuration migration to authoritative server store
+    migrateLegacyConfigToServer().catch(() => {});
+
     const updateData = () => {
       setActivities(getActivity());
     };
@@ -331,8 +335,9 @@ const DashboardOverview = () => {
   function handleApplySuggestion(insight: string) {
     // 1. Save to policies for display
     const existingPolicies = JSON.parse(localStorage.getItem("parent_policies") || "[]");
+    let updatedPolicies = existingPolicies;
     if (!existingPolicies.includes(insight)) {
-      const updatedPolicies = [insight, ...existingPolicies].slice(0, 10);
+      updatedPolicies = [insight, ...existingPolicies].slice(0, 10);
       localStorage.setItem("parent_policies", JSON.stringify(updatedPolicies));
     }
     
@@ -352,6 +357,14 @@ const DashboardOverview = () => {
           customInstructions: newInstructions
         };
         setAIConfig(newConfig);
+
+        // Authoritative server persistence
+        updateServerParentConfig({
+          aiBehavior: {
+            ...newConfig,
+            parentPolicies: updatedPolicies
+          }
+        }).catch(err => console.error("[Dashboard] Error persisting policy to server:", err));
       }
     } catch (error) {
       console.error("[Dashboard] Error updating AI config from insight:", error);

@@ -12,16 +12,58 @@ const { validateBody } = require('../validation/middleware');
 const groqHelper = require('../lib/groqHelper');
 const { checkOutputGuardrails } = require('../services/outputGuardrailService');
 const { classifyOutputSafety, SAFE_FALLBACK_RESPONSE } = require('../services/outputSafetyService');
+const configService = require('../services/configService');
 
 // POST /api/chat
 router.post('/', aiLimiter, validateBody('chat'), async (req, res) => {
   const { messages, model } = req.body;
 
   try {
+    // 0. Enforce server-authoritative parental controls
+    const parentConfig = configService.getParentConfig();
+    if (parentConfig?.screenTime?.isLocked) {
+      return res.status(403).json({
+        error: 'App is currently locked by parent',
+        code: 'APP_LOCKED'
+      });
+    }
+
+    // Enforce server-authoritative safety constraints and parent guidelines
+    let enrichedMessages = messages;
+    if (parentConfig?.aiBehavior) {
+      const directives = [];
+      const { strictMode, safetyLevel, toggles, customInstructions, parentPolicies } = parentConfig.aiBehavior;
+      if (strictMode || safetyLevel === 'strict' || toggles?.strictFiltering) {
+        directives.push('SAFETY: Politely and naturally redirect unsafe or adult topics to safe educational subjects.');
+      }
+      if (customInstructions && customInstructions.trim()) {
+        directives.push(`PARENT GUIDELINES: ${customInstructions.trim()}`);
+      }
+      if (Array.isArray(parentPolicies) && parentPolicies.length > 0) {
+        directives.push(`PARENT RULES:\n${parentPolicies.map(p => `- ${p}`).join('\n')}`);
+      }
+
+      if (directives.length > 0) {
+        const directiveBlock = `\n\n[AUTHORITATIVE PARENT POLICY]:\n${directives.join('\n')}`;
+        enrichedMessages = messages.map((m, idx) => {
+          if (idx === 0 && m.role === 'system') {
+            return { ...m, content: `${m.content}${directiveBlock}` };
+          }
+          return m;
+        });
+        if (!enrichedMessages.some(m => m.role === 'system')) {
+          enrichedMessages = [
+            { role: 'system', content: `You are a safe, educational AI for children.${directiveBlock}` },
+            ...enrichedMessages
+          ];
+        }
+      }
+    }
+
     // 1. Generate candidate response from AI provider
     const response = await groqHelper.callGroqAPI({
       endpoint: 'chat',
-      messages,
+      messages: enrichedMessages,
       model: model || "llama-3.1-8b-instant",
       isSafetyEndpoint: false
     });

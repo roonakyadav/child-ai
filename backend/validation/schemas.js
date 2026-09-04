@@ -108,6 +108,46 @@ const generateFullReportSchema = z.object({
   }).refine(val => Object.keys(val).length > 0, 'allData cannot be empty')
 }).strict();
 
+// PUT /api/config/parent
+const screenTimeSchema = z.object({
+  dailyLimit: z.number().int().min(0).max(1440).optional(),
+  isLocked: z.boolean().optional(),
+  restrictionEnabled: z.boolean().optional(),
+  mode: z.enum(['strict', 'balanced', 'learning']).optional()
+}).strict();
+
+const togglesSchema = z.object({
+  strictFiltering: z.boolean().optional(),
+  encourageCuriosity: z.boolean().optional(),
+  keepAnswersShort: z.boolean().optional(),
+  allowStorytelling: z.boolean().optional(),
+  avoidSensitiveTopics: z.boolean().optional(),
+  useSimpleLanguage: z.boolean().optional()
+}).strict();
+
+const aiBehaviorSchema = z.object({
+  selectedPreset: z.enum(['kid-safe', 'learning', 'focus', 'creative']).optional(),
+  safetyLevel: z.enum(['soft', 'moderate', 'strict']).optional(),
+  strictMode: z.boolean().optional(),
+  toggles: togglesSchema.optional(),
+  customInstructions: z.string().max(5000).optional(),
+  parentPolicies: z.array(z.string().max(500)).max(50).optional()
+}).strict();
+
+const parentConfigUpdateSchema = z.object({
+  screenTime: screenTimeSchema.optional(),
+  aiBehavior: aiBehaviorSchema.optional()
+}).strict().refine(val => Object.keys(val).length > 0, 'Must provide at least one configuration section to update');
+
+// POST /api/config/parent/migrate
+const parentConfigMigrateSchema = z.object({
+  screenTime: screenTimeSchema.optional(),
+  aiBehavior: aiBehaviorSchema.optional(),
+  parentPolicy: z.string().max(5000).optional(),
+  parentPolicies: z.array(z.string().max(500)).max(50).optional(),
+  strictMode: z.boolean().optional()
+}).strict();
+
 // --- Schema Export ---
 
 const schemas = {
@@ -122,7 +162,9 @@ const schemas = {
   analyzeEngagement: analyzeEngagementSchema,
   analyzeSentiment: analyzeSentimentSchema,
   analyzeEarlyRisk: analyzeEarlyRiskSchema,
-  generateFullReport: generateFullReportSchema
+  generateFullReport: generateFullReportSchema,
+  parentConfigUpdate: parentConfigUpdateSchema,
+  parentConfigMigrate: parentConfigMigrateSchema
 };
 
 module.exports = { schemas };

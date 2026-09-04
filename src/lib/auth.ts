@@ -128,4 +128,7 @@ export function setStrictMode(enabled: boolean): void {
   const settings = JSON.parse(localStorage.getItem("ai_settings") || "{}");
   settings.strictMode = enabled;
   localStorage.setItem("ai_settings", JSON.stringify(settings));
+
+  // Sync to authoritative server config if authenticated
+  put('/api/config/parent', { aiBehavior: { strictMode: enabled } }).catch(() => {});
 }

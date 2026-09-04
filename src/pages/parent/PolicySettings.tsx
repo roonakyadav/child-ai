@@ -27,6 +27,7 @@ import {
   AIBehaviorConfig
 } from "@/lib/policy";
 import { askGroq } from "@/lib/groq";
+import { fetchServerParentConfig, updateServerParentConfig } from "@/lib/parentConfigClient";
 
 const PolicySettings = () => {
   const [config, setConfig] = useState<AIBehaviorConfig>(getAIConfig());
@@ -35,6 +36,22 @@ const PolicySettings = () => {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+
+  // Load authoritative server config on mount
+  useEffect(() => {
+    fetchServerParentConfig().then(serverConfig => {
+      if (serverConfig?.aiBehavior) {
+        const loaded: AIBehaviorConfig = {
+          selectedPreset: serverConfig.aiBehavior.selectedPreset,
+          safetyLevel: serverConfig.aiBehavior.safetyLevel,
+          toggles: serverConfig.aiBehavior.toggles,
+          customInstructions: serverConfig.aiBehavior.customInstructions || ""
+        };
+        setConfig(loaded);
+        setAIConfig(loaded);
+      }
+    }).catch(err => console.error("[PolicySettings] Error fetching server config:", err));
+  }, []);
 
   const handlePresetChange = (preset: PresetMode) => {
     const presetData = PRESETS[preset];
@@ -49,6 +66,7 @@ const PolicySettings = () => {
     };
     setConfig(newConfig);
     setAIConfig(newConfig);
+    updateServerParentConfig({ aiBehavior: newConfig }).catch(() => {});
     setSaveStatus("saved");
     setTimeout(() => setSaveStatus("idle"), 2000);
   };
@@ -63,16 +81,19 @@ const PolicySettings = () => {
     };
     setConfig(newConfig);
     setAIConfig(newConfig);
+    updateServerParentConfig({ aiBehavior: newConfig }).catch(() => {});
   };
 
   const handleSafetyChange = (level: SafetyLevel) => {
     const newConfig = { ...config, safetyLevel: level };
     setConfig(newConfig);
     setAIConfig(newConfig);
+    updateServerParentConfig({ aiBehavior: newConfig }).catch(() => {});
   };
 
   const handleSaveCustom = () => {
     setAIConfig(config);
+    updateServerParentConfig({ aiBehavior: config }).catch(() => {});
     setSaveStatus("saved");
     setTimeout(() => setSaveStatus("idle"), 2000);
   };

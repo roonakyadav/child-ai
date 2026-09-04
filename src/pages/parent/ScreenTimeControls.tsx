@@ -22,11 +22,22 @@ import {
   UsageSession
 } from "@/lib/screen-time";
 import { getActivity } from "@/lib/activity";
+import { fetchServerParentConfig, updateServerParentConfig } from "@/lib/parentConfigClient";
 
 const ScreenTimeControls = () => {
   const [settings, setLocalSettings] = useState(getScreenTimeSettings());
   const [usedMinutes, setUsedMinutes] = useState(getUsedMinutesToday());
   const activities = getActivity();
+
+  // Load authoritative server config on mount
+  useEffect(() => {
+    fetchServerParentConfig().then(serverConfig => {
+      if (serverConfig?.screenTime) {
+        setLocalSettings(serverConfig.screenTime);
+        setScreenTimeSettings(serverConfig.screenTime);
+      }
+    }).catch(err => console.error("[ScreenTimeControls] Error fetching server config:", err));
+  }, []);
 
   // Update usage periodically
   useEffect(() => {
@@ -40,6 +51,7 @@ const ScreenTimeControls = () => {
     const newSettings = { ...settings, ...updates };
     setLocalSettings(newSettings);
     setScreenTimeSettings(newSettings);
+    updateServerParentConfig({ screenTime: newSettings }).catch(() => {});
   };
 
   // Data-Driven Analytics for Screen Time

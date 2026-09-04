@@ -35,6 +35,8 @@ export const API_ENDPOINTS = {
   decisionEngine: '/api/decision-engine',
   generateFullReport: '/api/generate-full-report',
   analyzeEngagement: '/api/analyze-engagement',
+  parentConfig: '/api/config/parent',
+  migrateConfig: '/api/config/parent/migrate',
 } as const;
 
 /**

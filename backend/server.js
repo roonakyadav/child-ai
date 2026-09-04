@@ -21,6 +21,7 @@ const safetyRouter = require('./routes/safety');
 const engagementRouter = require('./routes/engagement');
 const reportsRouter = require('./routes/reports');
 const testRouter = require('./routes/test');
+const configRouter = require('./routes/config');
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use(cookieParser());
 // Register routers
 app.use('/api/auth', authRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/config', configRouter);
 app.use('/api', insightsRouter);
 app.use('/api', intelligenceRouter);
 app.use('/api', safetyRouter);
