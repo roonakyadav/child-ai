@@ -53,6 +53,10 @@ interface AIInsights {
   smartInsights: string[];
 }
 
+// In-memory cache for AI insights and parent actions (never persisted to localStorage)
+let inMemoryInsightsCache: { data: AIInsights; timestamp: number; activityCount: string } | null = null;
+let inMemoryParentActions: any[] = [];
+
 const DashboardOverview = () => {
   const navigate = useNavigate();
   const config = getConfig();
@@ -122,11 +126,10 @@ const DashboardOverview = () => {
 
     const fetchInsights = async () => {
       const summary = getActivitySummary();
-      const cached = localStorage.getItem("ai_insights_cache");
-      const lastActivityCount = localStorage.getItem("ai_insights_activity_count");
+      const cached = inMemoryInsightsCache;
       
-      if (cached && lastActivityCount === totalQuestions.toString()) {
-        const { data, timestamp } = JSON.parse(cached);
+      if (cached && cached.activityCount === totalQuestions.toString()) {
+        const { data, timestamp } = cached;
         const tenMinutes = 10 * 60 * 1000;
         if (Date.now() - timestamp < tenMinutes) {
           setAiInsights(data);
@@ -140,8 +143,7 @@ const DashboardOverview = () => {
         // Validate data schema before setting
         if (data && typeof data.keyInsight === 'string' && Array.isArray(data.smartInsights)) {
           setAiInsights(data);
-          localStorage.setItem("ai_insights_cache", JSON.stringify({ data, timestamp: Date.now() }));
-          localStorage.setItem("ai_insights_activity_count", totalQuestions.toString());
+          inMemoryInsightsCache = { data, timestamp: Date.now(), activityCount: totalQuestions.toString() };
         } else {
           console.error("[Dashboard] Invalid insights schema received:", data);
         }
@@ -355,9 +357,9 @@ const DashboardOverview = () => {
       console.error("[Dashboard] Error updating AI config from insight:", error);
     }
 
-    // 3. Save to actions for tracking
+    // 3. Save to actions for tracking (in-memory)
     const actionType = getActionType(insight);
-    const existingActions = JSON.parse(localStorage.getItem("parent_actions") || "[]");
+    const existingActions = inMemoryParentActions;
     
     // Check if action type already exists
     const actionExists = existingActions.some((a: any) => a.type === actionType);
@@ -371,8 +373,7 @@ const DashboardOverview = () => {
         status: "active",
         timestamp: Date.now()
       };
-      const updatedActions = [newAction, ...existingActions];
-      localStorage.setItem("parent_actions", JSON.stringify(updatedActions));
+      inMemoryParentActions = [newAction, ...existingActions];
     }
     
     // Visual feedback

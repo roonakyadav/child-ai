@@ -18,6 +18,20 @@ export const SENSITIVE_STORAGE_KEYS = [
   "conversation_history",
   "global_conversation_history",
   "child_ai_growth_history",
+  "ai_intent_state",
+  "intent_state",
+  "current_intent_state",
+  "ai_system_injections",
+  "injection_storage",
+  "ai_mode",
+  "mode_storage",
+  "ai_mode_metadata",
+  "mode_metadata",
+  "ai_insights_cache",
+  "ai_insights_activity_count",
+  "parent_actions",
+  "child_ai_screen_time",
+  "child_ai_policy",
 ] as const;
 
 /**

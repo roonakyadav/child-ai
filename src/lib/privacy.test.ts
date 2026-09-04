@@ -8,6 +8,12 @@ import { addUserMessage, addAssistantMessage, getMessages, clearConversation } f
 import { detectRiskyMessage, analyzeBehaviorPattern, clearSafetyCaches } from "./safety";
 import { getIntelligenceMetrics, clearIntelligenceCache } from "./intelligence/index";
 import { gatherAllAppData } from "./reportService";
+import { setIntent, addRecentTopic, setActiveQuiz, getIntentState, clearIntent } from "./intentStore";
+import { injectSystemMessage, getInjections, clearInjections } from "./intervention/injectionService";
+import { setMode, getMode, resetMode } from "./intervention/modeService";
+import { setScreenTimeSettings, getScreenTimeSettings } from "./screen-time";
+import { setPolicy, getPolicy, setAIConfig, getAIConfig } from "./policy";
+import { setCurrentMode, getCurrentMode } from "./modeEngine";
 
 // Mock API client
 vi.mock("./apiClient", () => ({
@@ -32,6 +38,9 @@ describe("Sensitive Child Data Privacy & In-Memory Isolation", () => {
     clearConversation();
     clearSafetyCaches();
     clearIntelligenceCache();
+    clearIntent();
+    clearInjections();
+    resetMode();
     vi.clearAllMocks();
   });
 
@@ -293,6 +302,117 @@ describe("Sensitive Child Data Privacy & In-Memory Isolation", () => {
 
       for (const key of SENSITIVE_STORAGE_KEYS) {
         expect(localStorage.getItem(key)).toBeNull();
+      }
+    });
+  });
+
+  describe("Intent Store In-Memory Privacy", () => {
+    it("should manage conversation intent and child topics in memory only", () => {
+      setIntent("quiz");
+      addRecentTopic("dinosaurs");
+      addRecentTopic("space");
+      setActiveQuiz({
+        question: "What is 2+2?",
+        options: { A: "3", B: "4", C: "5", D: "6" },
+        correctAnswer: "B",
+        explanation: "Basic math",
+      });
+
+      expect(localStorage.getItem("ai_intent_state")).toBeNull();
+      expect(localStorage.getItem("intent_state")).toBeNull();
+      expect(localStorage.getItem("current_intent_state")).toBeNull();
+
+      const state = getIntentState();
+      expect(state.currentIntent).toBe("quiz");
+      expect(state.recentTopics).toEqual(["space", "dinosaurs"]);
+      expect(state.activeQuiz?.question).toBe("What is 2+2?");
+
+      clearIntent();
+      const clearedState = getIntentState();
+      expect(clearedState.currentIntent).toBe("general");
+      expect(clearedState.activeQuiz).toBeNull();
+      expect(localStorage.getItem("ai_intent_state")).toBeNull();
+    });
+  });
+
+  describe("System Injections In-Memory Privacy", () => {
+    it("should store and clear system directives in memory only", () => {
+      injectSystemMessage("Parent suggested redirecting conversation");
+      injectSystemMessage("Focus on math concepts");
+
+      expect(localStorage.getItem("ai_system_injections")).toBeNull();
+      expect(localStorage.getItem("injection_storage")).toBeNull();
+
+      const injections = getInjections();
+      expect(injections).toHaveLength(2);
+      expect(injections[0]).toBe("Parent suggested redirecting conversation");
+
+      clearInjections();
+      expect(getInjections()).toHaveLength(0);
+      expect(localStorage.getItem("ai_system_injections")).toBeNull();
+    });
+  });
+
+  describe("Intervention Mode In-Memory Privacy", () => {
+    it("should manage intervention mode and metadata in memory only", () => {
+      setMode("support");
+
+      expect(localStorage.getItem("ai_mode")).toBeNull();
+      expect(localStorage.getItem("mode_storage")).toBeNull();
+      expect(localStorage.getItem("ai_mode_metadata")).toBeNull();
+      expect(localStorage.getItem("mode_metadata")).toBeNull();
+
+      expect(getMode()).toBe("support");
+
+      resetMode();
+      expect(getMode()).toBe("normal");
+      expect(localStorage.getItem("ai_mode")).toBeNull();
+      expect(localStorage.getItem("ai_mode_metadata")).toBeNull();
+    });
+  });
+
+  describe("Durable Parent and UI Settings Retention", () => {
+    it("should persist non-sensitive parent configuration and UI persona in localStorage", () => {
+      // 1. Screen time settings
+      setScreenTimeSettings({
+        dailyLimit: 45,
+        isLocked: false,
+        restrictionEnabled: true,
+        mode: "balanced",
+      });
+      expect(JSON.parse(localStorage.getItem("screen_time_settings") || "{}")).toMatchObject({
+        dailyLimit: 45,
+        mode: "balanced",
+      });
+
+      // 2. Policy settings
+      setPolicy("Always encourage curiosity");
+      expect(localStorage.getItem("parent_ai_policy")).toBe("Always encourage curiosity");
+
+      // 3. AI Behavior Config
+      const aiConfig = getAIConfig();
+      setAIConfig({
+        ...aiConfig,
+        selectedPreset: "learning",
+      });
+      expect(JSON.parse(localStorage.getItem("ai_behavior_config") || "{}").selectedPreset).toBe("learning");
+
+      // 4. UI Companion Persona / Mode
+      setCurrentMode("fun");
+      expect(localStorage.getItem("child_ai_current_mode")).toBe("fun");
+      expect(getCurrentMode()).toBe("fun");
+    });
+  });
+
+  describe("Security: No Credentials or Secrets in Browser Storage", () => {
+    it("should ensure no passwords, PINs, tokens, or hashes are in localStorage", () => {
+      const allKeys = Object.keys(localStorage);
+      for (const key of allKeys) {
+        expect(key).not.toMatch(/pin/i);
+        expect(key).not.toMatch(/password/i);
+        expect(key).not.toMatch(/token/i);
+        expect(key).not.toMatch(/secret/i);
+        expect(key).not.toMatch(/session_id/i);
       }
     });
   });

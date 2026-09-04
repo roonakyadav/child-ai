@@ -1,7 +1,8 @@
 import { InterventionMode } from "@/types";
 
-const MODE_STORAGE_KEY = "ai_mode";
-const MODE_METADATA_KEY = "ai_mode_metadata";
+// In-memory intervention mode store for child session privacy (never persisted to localStorage)
+let inMemoryMode: InterventionMode = "normal";
+let inMemoryMetadata: ModeMetadata | null = null;
 
 interface ModeMetadata {
   messageCount: number;
@@ -9,28 +10,26 @@ interface ModeMetadata {
 }
 
 export function getMode(): InterventionMode {
-  const mode = localStorage.getItem(MODE_STORAGE_KEY) as InterventionMode;
-  return mode || "normal";
+  return inMemoryMode || "normal";
 }
 
 export function setMode(mode: InterventionMode): void {
-  localStorage.setItem(MODE_STORAGE_KEY, mode);
+  inMemoryMode = mode;
   
   // Reset metadata when mode is set (except for normal)
   if (mode !== "normal") {
-    const metadata: ModeMetadata = {
+    inMemoryMetadata = {
       messageCount: 0,
       startTime: Date.now(),
     };
-    localStorage.setItem(MODE_METADATA_KEY, JSON.stringify(metadata));
   } else {
-    localStorage.removeItem(MODE_METADATA_KEY);
+    inMemoryMetadata = null;
   }
 }
 
 export function resetMode(): void {
-  localStorage.setItem(MODE_STORAGE_KEY, "normal");
-  localStorage.removeItem(MODE_METADATA_KEY);
+  inMemoryMode = "normal";
+  inMemoryMetadata = null;
 }
 
 /**
@@ -39,24 +38,18 @@ export function resetMode(): void {
  */
 export function trackAndAutoReset(): void {
   const mode = getMode();
-  if (mode === "normal") return;
+  if (mode === "normal" || !inMemoryMetadata) return;
 
-  const storedMetadata = localStorage.getItem(MODE_METADATA_KEY);
-  if (!storedMetadata) return;
-
-  const metadata: ModeMetadata = JSON.parse(storedMetadata);
-  metadata.messageCount += 1;
+  inMemoryMetadata.messageCount += 1;
 
   const THIRTY_MINUTES = 30 * 60 * 1000;
   const MESSAGE_LIMIT = 10;
 
-  const isTimeUp = Date.now() - metadata.startTime > THIRTY_MINUTES;
-  const isMessageLimitReached = metadata.messageCount >= MESSAGE_LIMIT;
+  const isTimeUp = Date.now() - inMemoryMetadata.startTime > THIRTY_MINUTES;
+  const isMessageLimitReached = inMemoryMetadata.messageCount >= MESSAGE_LIMIT;
 
   if (isTimeUp || isMessageLimitReached) {
     resetMode();
-  } else {
-    localStorage.setItem(MODE_METADATA_KEY, JSON.stringify(metadata));
   }
 }
 
@@ -65,14 +58,9 @@ export function trackAndAutoReset(): void {
  */
 export function getInterventionRemainingTime(): number {
   const mode = getMode();
-  if (mode === "normal") return 0;
+  if (mode === "normal" || !inMemoryMetadata) return 0;
 
-  const storedMetadata = localStorage.getItem(MODE_METADATA_KEY);
-  if (!storedMetadata) return 0;
-
-  const metadata: ModeMetadata = JSON.parse(storedMetadata);
   const THIRTY_MINUTES = 30 * 60 * 1000;
-  
-  const remaining = (metadata.startTime + THIRTY_MINUTES) - Date.now();
+  const remaining = (inMemoryMetadata.startTime + THIRTY_MINUTES) - Date.now();
   return Math.max(0, remaining);
 }

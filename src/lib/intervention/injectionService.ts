@@ -1,29 +1,23 @@
-const INJECTION_STORAGE_KEY = "ai_system_injections";
+// In-memory injection store for child session privacy (never persisted to localStorage)
+let inMemoryInjections: string[] = [];
 
 /**
  * Injects an invisible system-level instruction for the next AI response.
  */
 export function injectSystemMessage(message: string): void {
-  const currentInjections = getInjections();
-  localStorage.setItem(INJECTION_STORAGE_KEY, JSON.stringify([...currentInjections, message]));
+  inMemoryInjections.push(message);
 }
 
 /**
  * Retrieves all pending system injections.
  */
 export function getInjections(): string[] {
-  try {
-    const stored = localStorage.getItem(INJECTION_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error("[InjectionService] Error reading injections:", error);
-    return [];
-  }
+  return [...inMemoryInjections];
 }
 
 /**
  * Clears all pending system injections.
  */
 export function clearInjections(): void {
-  localStorage.removeItem(INJECTION_STORAGE_KEY);
+  inMemoryInjections = [];
 }

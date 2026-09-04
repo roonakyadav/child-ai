@@ -24,7 +24,7 @@ interface IntentState {
   activeQuiz?: QuizState | null;
 }
 
-const STORAGE_KEY = "ai_intent_state";
+// In-memory intent store for child session privacy (never persisted to localStorage)
 const TOPIC_LIMIT = 10;
 const INTENT_TIMEOUT = 10 * 60 * 1000; // 10 minutes
 
@@ -35,22 +35,18 @@ const DEFAULT_STATE: IntentState = {
   activeQuiz: null,
 };
 
+let inMemoryIntentState: IntentState = { ...DEFAULT_STATE };
+
 export function getIntentState(): IntentState {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) return DEFAULT_STATE;
-    
-    const state: IntentState = JSON.parse(data);
-    
-    // Auto-reset intent if it's too old
-    if (Date.now() - state.lastUpdated > INTENT_TIMEOUT) {
-      return { ...state, currentIntent: "general", lastUpdated: Date.now(), activeQuiz: null };
-    }
-    
-    return state;
-  } catch (error) {
-    return DEFAULT_STATE;
+  // Auto-reset intent if it's too old
+  if (Date.now() - inMemoryIntentState.lastUpdated > INTENT_TIMEOUT) {
+    inMemoryIntentState = { ...inMemoryIntentState, currentIntent: "general", lastUpdated: Date.now(), activeQuiz: null };
   }
+  
+  return {
+    ...inMemoryIntentState,
+    recentTopics: [...inMemoryIntentState.recentTopics],
+  };
 }
 
 export function setIntent(intent: Intent): void {
@@ -81,9 +77,9 @@ export function addRecentTopic(topic: string): void {
 }
 
 export function clearIntent(): void {
-  saveState(DEFAULT_STATE);
+  saveState({ ...DEFAULT_STATE, lastUpdated: Date.now() });
 }
 
 function saveState(state: IntentState): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  inMemoryIntentState = state;
 }

@@ -3,6 +3,8 @@ import autoTable from "jspdf-autotable";
 import { getActivity } from "./activity";
 import { getAlerts } from "./alerts/alertService";
 import { getCachedIntelligence } from "./intelligence/index";
+import { getScreenTimeSettings } from "./screen-time";
+import { getPolicy } from "./policy";
 
 export interface ReportSection {
   heading: string;
@@ -174,8 +176,8 @@ export function gatherAllAppData() {
   const alerts = getAlerts();
   const activities = getActivity();
   const growthHistory: any[] = [];
-  const screenTime = localStorage.getItem("child_ai_screen_time") || "{}";
-  const policy = localStorage.getItem("child_ai_policy") || "{}";
+  const screenTime = getScreenTimeSettings();
+  const policy = { rules: getPolicy() };
 
   const extractedData = extractStructuredData();
 
@@ -184,8 +186,8 @@ export function gatherAllAppData() {
     activities,
     intelligence, // Real production intelligence
     growthHistory,
-    screenTime: JSON.parse(screenTime),
-    policy: JSON.parse(policy),
+    screenTime,
+    policy,
     extractedData,
   };
 }
