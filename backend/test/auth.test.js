@@ -379,89 +379,284 @@ describe('Authentication Endpoints', () => {
 
 describe('Parent Endpoint Authorization Protection', () => {
   let app;
+  const groqHelper = require('../lib/groqHelper');
 
   beforeEach(() => {
     _resetForTesting();
+    vi.restoreAllMocks();
+
     app = express();
     app.use(express.json());
     app.use(cookieParser());
 
     // Register all routers with their endpoints
     const authRouter = require('../routes/auth');
+    const chatRouter = require('../routes/chat');
     const insightsRouter = require('../routes/insights');
     const intelligenceRouter = require('../routes/intelligence');
     const reportsRouter = require('../routes/reports');
     const engagementRouter = require('../routes/engagement');
+    const safetyRouter = require('../routes/safety');
     const testRouter = require('../routes/test');
 
     app.use('/api/auth', authRouter);
+    app.use('/api/chat', chatRouter);
     app.use('/api', insightsRouter);
     app.use('/api', intelligenceRouter);
     app.use('/api', reportsRouter);
     app.use('/api', engagementRouter);
+    app.use('/api', safetyRouter);
     app.use('/api', testRouter);
   });
 
-  it('should allow public access to /api/test', async () => {
-    const response = await request(app).get('/api/test');
-    expect(response.status).toBe(200);
-    expect(response.text).toBe('API WORKING');
+  const protectedEndpoints = [
+    {
+      name: 'POST /api (insights)',
+      method: 'post',
+      path: '/api',
+      payload: { summary: { totalUsageMinutes: 10 } },
+      mockResponse: { keyInsight: 'Active learning', smartInsights: ['Insight 1', 'Insight 2', 'Insight 3'] }
+    },
+    {
+      name: 'POST /api/deep-analysis',
+      method: 'post',
+      path: '/api/deep-analysis',
+      payload: { insight: 'test', summary: { a: 1 }, insightType: 'safety' },
+      mockResponse: { analysis: 'Analysis completed', severity: 'low', signals: ['distress'], pattern: { exists: false }, recommended_actions: ['step 1'] }
+    },
+    {
+      name: 'POST /api/analyze-intelligence',
+      method: 'post',
+      path: '/api/analyze-intelligence',
+      payload: { messages: [{ message: 'hi', timestamp: Date.now(), category: 'chat' }] },
+      mockResponse: { curiosity: 80, mathConfidence: 75, attentionSpan: 85, reasoning: { curiosity: 'high', mathConfidence: 'good', attentionSpan: 'strong' } }
+    },
+    {
+      name: 'POST /api/decision-engine',
+      method: 'post',
+      path: '/api/decision-engine',
+      payload: { metrics: { curiosity: 80 } },
+      mockResponse: { topInsight: 'Great focus', focusArea: { metric: 'Curiosity', value: 80 }, trend: 'improving', keyChanges: ['Growth'], actionPlan: 'Keep practicing', confidence: 90 }
+    },
+    {
+      name: 'POST /api/analyze-engagement',
+      method: 'post',
+      path: '/api/analyze-engagement',
+      payload: { usageData: { totalActivities: 5 } },
+      mockResponse: { statusReason: 'Active', trendExplanation: 'Consistent', behaviorPattern: 'Daily study', actionRecommendation: 'Explore math', activityLevel: 'High', consistencyLevel: 'High' }
+    },
+    {
+      name: 'POST /api/generate-full-report',
+      method: 'post',
+      path: '/api/generate-full-report',
+      payload: { allData: { extractedData: { totalMessages: 5 } } },
+      mockResponse: { title: 'Full Report', childName: 'Alex', date: '2026-09-04', sections: [], metrics_summary: { curiosity: 80, mathConfidence: 80, attentionSpan: 80, overall_stability: 'Stable' } }
+    },
+    {
+      name: 'POST /api/auth/parent/update',
+      method: 'post',
+      path: '/api/auth/parent/update',
+      payload: { pin: '8888' },
+      mockResponse: null
+    }
+  ];
+
+  describe('Systematic Authorization Audit on Protected Endpoints', () => {
+    protectedEndpoints.forEach(({ name, method, path, payload, mockResponse }) => {
+      describe(`${name}`, () => {
+        it('1. Rejects request with 401 when no session cookie is provided', async () => {
+          const groqSpy = vi.spyOn(groqHelper, 'callGroqAPI');
+
+          const res = await request(app)[method](path).send(payload);
+
+          expect(res.status).toBe(401);
+          expect(res.body.error).toBe('Authentication required');
+          // Authorization check occurs before AI calls
+          expect(groqSpy).not.toHaveBeenCalled();
+        });
+
+        it('2. Rejects request with 401 when forged/random session cookie is provided', async () => {
+          const groqSpy = vi.spyOn(groqHelper, 'callGroqAPI');
+
+          const res = await request(app)[method](path)
+            .set('Cookie', 'parent_session=forged-invalid-session-token-12345')
+            .send(payload);
+
+          expect(res.status).toBe(401);
+          expect(res.body.error).toBe('Authentication required');
+          expect(groqSpy).not.toHaveBeenCalled();
+        });
+
+        it('3. Rejects request with 401 when session cookie is expired', async () => {
+          const session = createSession();
+          // Manually expire session
+          session.expiresAt = Date.now() - 5000;
+          const groqSpy = vi.spyOn(groqHelper, 'callGroqAPI');
+
+          const res = await request(app)[method](path)
+            .set('Cookie', `parent_session=${session.id}`)
+            .send(payload);
+
+          expect(res.status).toBe(401);
+          expect(res.body.error).toBe('Authentication required');
+          expect(groqSpy).not.toHaveBeenCalled();
+        });
+
+        it('4. Allows request and reaches business logic when valid authenticated session is provided', async () => {
+          const session = createSession();
+          if (mockResponse) {
+            vi.spyOn(groqHelper, 'callGroqAPI').mockResolvedValueOnce({
+              choices: [{ message: { content: JSON.stringify(mockResponse) } }]
+            });
+          }
+
+          const res = await request(app)[method](path)
+            .set('Cookie', `parent_session=${session.id}`)
+            .send(payload);
+
+          expect(res.status).toBe(200);
+          if (mockResponse) {
+            expect(res.body).toEqual(mockResponse);
+          } else {
+            expect(res.body).toEqual({ success: true });
+          }
+        });
+      });
+    });
   });
 
-  it('should protect POST /api (insights) requiring authenticated parent session', async () => {
-    // Unauthenticated
-    const unauthRes = await request(app)
-      .post('/api')
-      .send({ summary: { totalUsageMinutes: 10 } });
-    expect(unauthRes.status).toBe(401);
-    expect(unauthRes.body.error).toBe('Authentication required');
+  describe('Public Endpoints Accessibility & Non-Leakage', () => {
+    it('GET /api/test is accessible without auth and leaks no sensitive data', async () => {
+      const res = await request(app).get('/api/test');
+      expect(res.status).toBe(200);
+      expect(res.text).toBe('API WORKING');
+      expect(res.body.pin).toBeUndefined();
+      expect(res.body.sessionId).toBeUndefined();
+    });
 
-    // Authenticated with valid session (auth passes, fails later only on groq mock if no mock)
-    const session = createSession();
-    const authRes = await request(app)
-      .post('/api')
-      .set('Cookie', `parent_session=${session.id}`)
-      .send({ summary: { totalUsageMinutes: 10 } });
-    expect(authRes.status).not.toBe(401);
-  });
+    it('GET /api/auth/parent/status is accessible without auth and exposes only boolean configured', async () => {
+      const res = await request(app).get('/api/auth/parent/status');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ configured: false });
+      expect(res.body.hash).toBeUndefined();
+      expect(res.body.salt).toBeUndefined();
+    });
 
-  it('should protect POST /api/deep-analysis requiring authenticated parent session', async () => {
-    const unauthRes = await request(app)
-      .post('/api/deep-analysis')
-      .send({ insight: 'test', summary: { a: 1 }, insightType: 'safety' });
-    expect(unauthRes.status).toBe(401);
-    expect(unauthRes.body.error).toBe('Authentication required');
-  });
+    it('POST /api/chat is accessible without parent auth and delivers screened AI responses', async () => {
+      vi.spyOn(groqHelper, 'callGroqAPI').mockImplementation(async (opts) => {
+        if (opts.endpoint === 'chat') {
+          return { choices: [{ message: { role: 'assistant', content: 'The sky is blue because of Rayleigh scattering!' } }] };
+        }
+        if (opts.endpoint === 'output-safety') {
+          return { choices: [{ message: { content: JSON.stringify({ status: 'safe', category: 'safe', reason: 'Educational' }) } }] };
+        }
+        throw new Error(`Unexpected endpoint: ${opts.endpoint}`);
+      });
 
-  it('should protect POST /api/generate-full-report requiring authenticated parent session', async () => {
-    const unauthRes = await request(app)
-      .post('/api/generate-full-report')
-      .send({ allData: { extractedData: { totalMessages: 5 } } });
-    expect(unauthRes.status).toBe(401);
-    expect(unauthRes.body.error).toBe('Authentication required');
-  });
+      const res = await request(app)
+        .post('/api/chat')
+        .send({ messages: [{ role: 'user', content: 'Why is the sky blue?' }] });
 
-  it('should protect POST /api/analyze-intelligence requiring authenticated parent session', async () => {
-    const unauthRes = await request(app)
-      .post('/api/analyze-intelligence')
-      .send({ messages: [{ message: 'hi', timestamp: Date.now(), category: 'chat' }] });
-    expect(unauthRes.status).toBe(401);
-    expect(unauthRes.body.error).toBe('Authentication required');
-  });
+      expect(res.status).toBe(200);
+      expect(res.body.choices[0].message.content).toContain('Rayleigh scattering');
+    });
 
-  it('should protect POST /api/decision-engine requiring authenticated parent session', async () => {
-    const unauthRes = await request(app)
-      .post('/api/decision-engine')
-      .send({ metrics: { curiosity: 80 } });
-    expect(unauthRes.status).toBe(401);
-    expect(unauthRes.body.error).toBe('Authentication required');
-  });
+    it('POST /api/detect-risk is accessible without parent auth for child input screening', async () => {
+      vi.spyOn(groqHelper, 'callGroqAPI').mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                is_flagged: false,
+                severity: 'low',
+                category: 'safe',
+                reason: 'Normal input'
+              })
+            }
+          }
+        ]
+      });
 
-  it('should protect POST /api/analyze-engagement requiring authenticated parent session', async () => {
-    const unauthRes = await request(app)
-      .post('/api/analyze-engagement')
-      .send({ usageData: { totalActivities: 5 } });
-    expect(unauthRes.status).toBe(401);
-    expect(unauthRes.body.error).toBe('Authentication required');
+      const res = await request(app)
+        .post('/api/detect-risk')
+        .send({ message: 'Hello AI buddy!' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('safe');
+      expect(res.body.is_flagged).toBe(false);
+    });
+
+    it('POST /api/analyze-early-risk is accessible without parent auth for session predictive safety', async () => {
+      vi.spyOn(groqHelper, 'callGroqAPI').mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                early_risk: false,
+                risk_type: 'none',
+                severity: 'low',
+                confidence: 90,
+                explanation: 'Calm conversation'
+              })
+            }
+          }
+        ]
+      });
+
+      const res = await request(app)
+        .post('/api/analyze-early-risk')
+        .send({ messages: [{ text: 'Tell me about dinosaurs', timestamp: Date.now() }] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.early_risk).toBe(false);
+    });
+
+    it('POST /api/analyze-sentiment is accessible without parent auth for child interaction scoring', async () => {
+      vi.spyOn(groqHelper, 'callGroqAPI').mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                score: 85,
+                label: 'Curious',
+                explanation: 'Eager question'
+              })
+            }
+          }
+        ]
+      });
+
+      const res = await request(app)
+        .post('/api/analyze-sentiment')
+        .send({ message: 'How do rockets fly?' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.score).toBe(85);
+    });
+
+    it('POST /api/analyze-pattern is accessible without parent auth for child safety pattern screening', async () => {
+      vi.spyOn(groqHelper, 'callGroqAPI').mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                pattern_detected: false,
+                pattern_type: 'none',
+                severity: 'low',
+                explanation: 'Normal sequence',
+                confidence: 95
+              })
+            }
+          }
+        ]
+      });
+
+      const res = await request(app)
+        .post('/api/analyze-pattern')
+        .send({ messages: [{ text: 'Hello', timestamp: 1000 }, { text: 'How are you?', timestamp: 2000 }] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.pattern_detected).toBe(false);
+    });
   });
 });

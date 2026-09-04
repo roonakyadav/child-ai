@@ -8,7 +8,7 @@ const router = express.Router();
 const { aiLimiter } = require('../middleware/rateLimit');
 const { requireParentAuth } = require('../middleware/auth');
 const { validateBody } = require('../validation/middleware');
-const { callGroqAPI } = require('../lib/groqHelper');
+const groqHelper = require('../lib/groqHelper');
 
 // POST /api/generate-full-report
 router.post('/generate-full-report', requireParentAuth, aiLimiter, validateBody('generateFullReport'), async (req, res) => {
@@ -99,7 +99,7 @@ router.post('/generate-full-report', requireParentAuth, aiLimiter, validateBody(
   `;
 
   try {
-    const response = await callGroqAPI({
+    const response = await groqHelper.callGroqAPI({
       endpoint: 'generate-full-report',
       messages: [
         { role: "system", content: systemPrompt },

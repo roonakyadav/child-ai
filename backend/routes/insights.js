@@ -8,9 +8,9 @@ const router = express.Router();
 const { aiLimiter } = require('../middleware/rateLimit');
 const { requireParentAuth } = require('../middleware/auth');
 const { validateBody } = require('../validation/middleware');
-const { callGroqAPI } = require('../lib/groqHelper');
+const groqHelper = require('../lib/groqHelper');
 
-// POST /api/insights
+// POST /api (insights)
 router.post('/', requireParentAuth, aiLimiter, validateBody('insights'), async (req, res) => {
   const { summary } = req.body;
 
@@ -39,7 +39,7 @@ router.post('/', requireParentAuth, aiLimiter, validateBody('insights'), async (
   `;
 
   try {
-    const response = await callGroqAPI({
+    const response = await groqHelper.callGroqAPI({
       endpoint: 'insights',
       messages: [
         { role: "system", content: systemPrompt },
@@ -164,7 +164,7 @@ router.post('/deep-analysis', requireParentAuth, aiLimiter, validateBody('deepAn
   }
 
   try {
-    const response = await callGroqAPI({
+    const response = await groqHelper.callGroqAPI({
       endpoint: 'deep-analysis',
       messages: [
         { role: "system", content: systemPrompt },

@@ -46,7 +46,7 @@ router.get('/parent/status', generalLimiter, (req, res) => {
 
 // POST /api/auth/parent/update
 // Update parent PIN (strictly requires authenticated parent session)
-router.post('/parent/update', authLimiter, requireParentAuth, validateBody('login'), async (req, res) => {
+router.post('/parent/update', requireParentAuth, authLimiter, validateBody('login'), async (req, res) => {
   const { pin } = req.body;
 
   // Update PIN hash on server

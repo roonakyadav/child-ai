@@ -8,7 +8,7 @@ const router = express.Router();
 const { aiLimiter } = require('../middleware/rateLimit');
 const { requireParentAuth } = require('../middleware/auth');
 const { validateBody } = require('../validation/middleware');
-const { callGroqAPI } = require('../lib/groqHelper');
+const groqHelper = require('../lib/groqHelper');
 
 // POST /api/analyze-intelligence
 router.post('/analyze-intelligence', requireParentAuth, aiLimiter, async (req, res) => {
@@ -63,7 +63,7 @@ router.post('/analyze-intelligence', requireParentAuth, aiLimiter, async (req, r
   `;
 
   try {
-    const response = await callGroqAPI({
+    const response = await groqHelper.callGroqAPI({
       endpoint: 'analyze-intelligence',
       messages: [
         { role: "system", content: systemPrompt },
@@ -137,7 +137,7 @@ router.post('/decision-engine', requireParentAuth, aiLimiter, validateBody('deci
   `;
 
   try {
-    const response = await callGroqAPI({
+    const response = await groqHelper.callGroqAPI({
       endpoint: 'decision-engine',
       messages: [
         { role: "system", content: systemPrompt },

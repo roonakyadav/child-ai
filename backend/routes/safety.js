@@ -5,10 +5,11 @@
 
 const express = require('express');
 const router = express.Router();
-const { callGroqAPI } = require('../lib/groqHelper');
+const { aiLimiter } = require('../middleware/rateLimit');
+const groqHelper = require('../lib/groqHelper');
 
 // POST /api/detect-risk
-router.post('/detect-risk', async (req, res) => {
+router.post('/detect-risk', aiLimiter, async (req, res) => {
   const { message } = req.body;
 
   if (!message) {
@@ -43,7 +44,7 @@ router.post('/detect-risk', async (req, res) => {
   `;
 
   try {
-    const response = await callGroqAPI({
+    const response = await groqHelper.callGroqAPI({
       endpoint: 'detect-risk',
       messages: [
         { role: "system", content: systemPrompt.replace("{message}", message) },
@@ -85,7 +86,7 @@ router.post('/detect-risk', async (req, res) => {
 });
 
 // POST /api/analyze-pattern
-router.post('/analyze-pattern', async (req, res) => {
+router.post('/analyze-pattern', aiLimiter, async (req, res) => {
   const { messages } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
@@ -126,7 +127,7 @@ router.post('/analyze-pattern', async (req, res) => {
   `;
 
   try {
-    const response = await callGroqAPI({
+    const response = await groqHelper.callGroqAPI({
       endpoint: 'analyze-pattern',
       messages: [
         { role: "system", content: systemPrompt },
@@ -166,7 +167,7 @@ router.post('/analyze-pattern', async (req, res) => {
 });
 
 // POST /api/analyze-early-risk
-router.post('/analyze-early-risk', async (req, res) => {
+router.post('/analyze-early-risk', aiLimiter, async (req, res) => {
   const { messages } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
@@ -199,7 +200,7 @@ router.post('/analyze-early-risk', async (req, res) => {
   `;
 
   try {
-    const response = await callGroqAPI({
+    const response = await groqHelper.callGroqAPI({
       endpoint: 'analyze-early-risk',
       messages: [
         { role: "system", content: systemPrompt },
