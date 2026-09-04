@@ -25,8 +25,9 @@ function validateBody(schemaName) {
     } catch (error) {
       // Handle Zod validation errors
       if (error.name === 'ZodError') {
-        const errors = error.errors.map(err => ({
-          path: err.path.join('.'),
+        const issues = error.issues || error.errors || [];
+        const errors = issues.map(err => ({
+          path: Array.isArray(err.path) ? err.path.join('.') : String(err.path || ''),
           message: err.message
         }));
         

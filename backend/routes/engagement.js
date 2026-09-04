@@ -6,10 +6,11 @@
 const express = require('express');
 const router = express.Router();
 const { aiLimiter } = require('../middleware/rateLimit');
+const { requireParentAuth } = require('../middleware/auth');
 const { callGroqAPI } = require('../lib/groqHelper');
 
 // POST /api/analyze-engagement
-router.post('/analyze-engagement', async (req, res) => {
+router.post('/analyze-engagement', requireParentAuth, aiLimiter, async (req, res) => {
   const { usageData, sessionSummary } = req.body;
 
   if (!usageData) {

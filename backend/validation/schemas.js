@@ -23,10 +23,9 @@ const messageSchema = z.object({
 
 // --- Endpoint Schemas ---
 
-// POST /api/auth/parent/login
+// POST /api/auth/parent/login, setup, update
 const loginSchema = z.object({
-  pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits'),
-  storedPinHash: z.string().min(1)
+  pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits')
 }).strict();
 
 // POST /api/chat

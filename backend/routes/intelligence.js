@@ -6,11 +6,12 @@
 const express = require('express');
 const router = express.Router();
 const { aiLimiter } = require('../middleware/rateLimit');
+const { requireParentAuth } = require('../middleware/auth');
 const { validateBody } = require('../validation/middleware');
 const { callGroqAPI } = require('../lib/groqHelper');
 
 // POST /api/analyze-intelligence
-router.post('/analyze-intelligence', aiLimiter, async (req, res) => {
+router.post('/analyze-intelligence', requireParentAuth, aiLimiter, async (req, res) => {
   const { messages } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
@@ -88,7 +89,7 @@ router.post('/analyze-intelligence', aiLimiter, async (req, res) => {
 });
 
 // POST /api/decision-engine
-router.post('/decision-engine', aiLimiter, validateBody('decisionEngine'), async (req, res) => {
+router.post('/decision-engine', requireParentAuth, aiLimiter, validateBody('decisionEngine'), async (req, res) => {
   const { metrics, history } = req.body;
 
   const systemPrompt = `

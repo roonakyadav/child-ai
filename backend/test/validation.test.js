@@ -6,25 +6,43 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 
 describe('Validation Middleware', () => {
   describe('Login Validation', () => {
     it('should accept valid login payload', async () => {
       const app = express();
       app.use(express.json());
+      app.use(cookieParser());
       
       const authRouter = require('../routes/auth');
       app.use('/api/auth', authRouter);
 
-      const { hashPin } = require('../services/authService');
+      const { _resetForTesting, setParentPinHash } = require('../services/authService');
+      _resetForTesting();
       const pin = '1234';
-      const storedPinHash = hashPin(pin);
+      setParentPinHash(pin);
 
       const response = await request(app)
         .post('/api/auth/parent/login')
-        .send({ pin, storedPinHash });
+        .send({ pin });
 
       expect(response.status).toBe(200);
+    });
+
+    it('should reject invalid PIN format', async () => {
+      const app = express();
+      app.use(express.json());
+      app.use(cookieParser());
+
+      const authRouter = require('../routes/auth');
+      app.use('/api/auth', authRouter);
+
+      const response = await request(app)
+        .post('/api/auth/parent/login')
+        .send({ pin: 'abc' });
+
+      expect(response.status).toBe(400);
     });
   });
 

@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { generalLimiter, aiLimiter } from '../middleware/rateLimit';
+import { generalLimiter, aiLimiter, authLimiter } from '../middleware/rateLimit';
 
 describe('Rate Limiting Middleware', () => {
   describe('General Rate Limiter', () => {
@@ -70,13 +70,34 @@ describe('Rate Limiting Middleware', () => {
   });
 
   describe('Rate Limiter Configuration', () => {
-    it('should have stricter limit for AI endpoints', () => {
+    it('should have stricter limit for AI and auth endpoints', () => {
       // Verify the limiters are configured with different limits
-      const { generalLimiter, aiLimiter } = require('../middleware/rateLimit');
+      const { generalLimiter, aiLimiter, authLimiter } = require('../middleware/rateLimit');
       
       // The limiter instances should have different configurations
       expect(generalLimiter).toBeDefined();
       expect(aiLimiter).toBeDefined();
+      expect(authLimiter).toBeDefined();
+    });
+  });
+
+  describe('Auth Rate Limiter', () => {
+    let app;
+
+    beforeEach(() => {
+      app = express();
+      app.use(express.json());
+      const { authLimiter } = require('../middleware/rateLimit');
+      app.use(authLimiter);
+
+      app.post('/api/auth/parent/login', (req, res) => {
+        res.json({ success: true });
+      });
+    });
+
+    it('should allow auth requests under limit', async () => {
+      const response = await request(app).post('/api/auth/parent/login');
+      expect(response.status).toBe(200);
     });
   });
 });

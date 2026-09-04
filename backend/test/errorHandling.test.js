@@ -27,14 +27,20 @@ describe('AI Error Handling', () => {
 
   describe('POST /api/analyze-engagement', () => {
     it('should require usageData parameter', async () => {
+      const cookieParser = require('cookie-parser');
+      const { createSession } = require('../services/authService');
       const app = express();
       app.use(express.json());
+      app.use(cookieParser());
       
       const engagementRouter = require('../routes/engagement');
       app.use('/api', engagementRouter);
 
+      const session = createSession();
+
       const response = await request(app)
         .post('/api/analyze-engagement')
+        .set('Cookie', `parent_session=${session.id}`)
         .send({});
 
       expect(response.status).toBe(400);

@@ -6,16 +6,15 @@
 const express = require('express');
 const router = express.Router();
 const { aiLimiter } = require('../middleware/rateLimit');
+const { requireParentAuth } = require('../middleware/auth');
 const { validateBody } = require('../validation/middleware');
 const { callGroqAPI } = require('../lib/groqHelper');
 
 // POST /api/generate-full-report
-router.post('/generate-full-report', aiLimiter, validateBody('generateFullReport'), async (req, res) => {
-  console.log("✅ HIT generate-full-report");
+router.post('/generate-full-report', requireParentAuth, aiLimiter, validateBody('generateFullReport'), async (req, res) => {
   const { allData } = req.body;
 
   const { extractedData, childName = "Alex" } = allData;
-  console.log("[Report] Generating from structured data:", JSON.stringify(extractedData));
 
   const systemPrompt = `
     You are a world-class AI child development specialist and behavioral psychologist.

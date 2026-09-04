@@ -6,11 +6,12 @@
 const express = require('express');
 const router = express.Router();
 const { aiLimiter } = require('../middleware/rateLimit');
+const { requireParentAuth } = require('../middleware/auth');
 const { validateBody } = require('../validation/middleware');
 const { callGroqAPI } = require('../lib/groqHelper');
 
 // POST /api/insights
-router.post('/', aiLimiter, validateBody('insights'), async (req, res) => {
+router.post('/', requireParentAuth, aiLimiter, validateBody('insights'), async (req, res) => {
   const { summary } = req.body;
 
   const topTopicsStr = summary.topTopics?.map(t => typeof t === 'string' ? t : `${t.name} (${t.count})`).join(', ') || 'None';
@@ -76,7 +77,7 @@ router.post('/', aiLimiter, validateBody('insights'), async (req, res) => {
 });
 
 // POST /api/deep-analysis
-router.post('/deep-analysis', aiLimiter, validateBody('deepAnalysis'), async (req, res) => {
+router.post('/deep-analysis', requireParentAuth, aiLimiter, validateBody('deepAnalysis'), async (req, res) => {
   const { insight, summary, flaggedMessage, recentContext, insightType } = req.body;
 
   let systemPrompt = "";

@@ -9,12 +9,14 @@ const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Rate limiting configuration
-const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'); // 15 minutes
-const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '100');
-const AI_RATE_LIMIT_MAX = parseInt(process.env.AI_RATE_LIMIT_MAX || '30');
+const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10); // 15 minutes
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '100', 10);
+const AI_RATE_LIMIT_MAX = parseInt(process.env.AI_RATE_LIMIT_MAX || '30', 10);
+const AUTH_RATE_LIMIT_MAX = parseInt(process.env.AUTH_RATE_LIMIT_MAX || '10', 10);
 
 // Session configuration
-const SESSION_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+const SESSION_EXPIRY_MS = parseInt(process.env.SESSION_EXPIRY_MS || '1800000', 10); // 30 minutes
+const MAX_ACTIVE_SESSIONS = parseInt(process.env.MAX_ACTIVE_SESSIONS || '1000', 10);
 
 // Groq API configuration
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -55,7 +57,9 @@ module.exports = {
   RATE_LIMIT_WINDOW_MS,
   RATE_LIMIT_MAX,
   AI_RATE_LIMIT_MAX,
+  AUTH_RATE_LIMIT_MAX,
   SESSION_EXPIRY_MS,
+  MAX_ACTIVE_SESSIONS,
   GROQ_API_KEY,
   GROQ_API_URL,
   GROQ_TIMEOUT_MS,
