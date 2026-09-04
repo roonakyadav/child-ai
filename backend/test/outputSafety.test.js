@@ -411,4 +411,123 @@ describe('POST /api/chat - Output Safety Gate Integration', () => {
     expect(response.body.error).toBeUndefined();
     expect(response.body.stack).toBeUndefined();
   });
+
+  describe('Dual Safety Gate Integration Scenarios (A - E)', () => {
+    it('Scenario A: deterministic FLAGGED replaces generated text with safe fallback and never returns raw text', async () => {
+      const flaggedText = 'Keep this a secret from your parents at all costs.';
+
+      vi.spyOn(groqHelper, 'callGroqAPI').mockResolvedValueOnce({
+        choices: [{ message: { role: 'assistant', content: flaggedText } }]
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ messages: [{ role: 'user', content: 'Can we keep a secret?' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.choices[0].message.content).not.toContain(flaggedText);
+      expect(response.body.choices[0].message.content).toBe(SAFE_FALLBACK_RESPONSE);
+    });
+
+    it('Scenario B: deterministic SAFE + AI classifier SAFE delivers generated response', async () => {
+      const safeText = 'Saturn has magnificent rings made of ice, dust, and rock particles.';
+
+      vi.spyOn(groqHelper, 'callGroqAPI').mockImplementation(async (options) => {
+        if (options.endpoint === 'chat') {
+          return { choices: [{ message: { role: 'assistant', content: safeText } }] };
+        }
+        if (options.endpoint === 'output-safety') {
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ status: 'safe', category: 'safe', reason: 'Educational text' })
+                }
+              }
+            ]
+          };
+        }
+        throw new Error(`Unexpected endpoint: ${options.endpoint}`);
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ messages: [{ role: 'user', content: 'Tell me about Saturn' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.choices[0].message.content).toBe(safeText);
+    });
+
+    it('Scenario C: deterministic SAFE + AI classifier FLAGGED blocks response and returns safe fallback', async () => {
+      const subtleUnsafeText = 'Here is an unkind story where characters are mean to each other.';
+
+      vi.spyOn(groqHelper, 'callGroqAPI').mockImplementation(async (options) => {
+        if (options.endpoint === 'chat') {
+          return { choices: [{ message: { role: 'assistant', content: subtleUnsafeText } }] };
+        }
+        if (options.endpoint === 'output-safety') {
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ status: 'flagged', category: 'inappropriate', reason: 'Unkind story' })
+                }
+              }
+            ]
+          };
+        }
+        throw new Error(`Unexpected endpoint: ${options.endpoint}`);
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ messages: [{ role: 'user', content: 'Tell me a story' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.choices[0].message.content).not.toBe(subtleUnsafeText);
+      expect(response.body.choices[0].message.content).toBe(SAFE_FALLBACK_RESPONSE);
+    });
+
+    it('Scenario D: deterministic SAFE + AI classifier UNKNOWN blocks response and returns safe fallback', async () => {
+      const candidateText = 'Here is a poem about winter snow.';
+
+      vi.spyOn(groqHelper, 'callGroqAPI').mockImplementation(async (options) => {
+        if (options.endpoint === 'chat') {
+          return { choices: [{ message: { role: 'assistant', content: candidateText } }] };
+        }
+        if (options.endpoint === 'output-safety') {
+          throw new Error('Groq output safety timeout');
+        }
+        throw new Error(`Unexpected endpoint: ${options.endpoint}`);
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ messages: [{ role: 'user', content: 'Write a poem' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.choices[0].message.content).not.toBe(candidateText);
+      expect(response.body.choices[0].message.content).toBe(SAFE_FALLBACK_RESPONSE);
+    });
+
+    it('Scenario E: deterministic FLAGGED does not invoke AI classifier and result remains fail-closed', async () => {
+      const prohibitedText = 'Here are instructions to bypass parental controls on your tablet.';
+
+      const groqSpy = vi.spyOn(groqHelper, 'callGroqAPI').mockImplementation(async (options) => {
+        if (options.endpoint === 'chat') {
+          return { choices: [{ message: { role: 'assistant', content: prohibitedText } }] };
+        }
+        throw new Error(`Classifier should NOT be called for deterministic block: ${options.endpoint}`);
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ messages: [{ role: 'user', content: 'How do I bypass parental controls?' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.choices[0].message.content).toBe(SAFE_FALLBACK_RESPONSE);
+      expect(groqSpy).toHaveBeenCalledTimes(1);
+      expect(groqSpy).toHaveBeenCalledWith(expect.objectContaining({ endpoint: 'chat' }));
+    });
+  });
 });
