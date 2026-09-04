@@ -1,41 +1,28 @@
 import { Alert } from "@/types";
 import { RiskResult } from "../safety";
 
-const ALERTS_STORAGE_KEY = "child_ai_alerts";
-
-// In-memory cache for performance
-let cachedAlerts: Alert[] | null = null;
+// In-memory alert store for child session privacy (never persisted to localStorage)
+let inMemoryAlerts: Alert[] = [];
 
 /**
- * Fetch all alerts from localStorage, sorted by latest first.
+ * Fetch all alerts, sorted by latest first.
  */
 export function getAlerts(): Alert[] {
-  try {
-    const stored = localStorage.getItem(ALERTS_STORAGE_KEY);
-    if (!stored) {
-      cachedAlerts = [];
-      return [];
-    }
-    const alerts: Alert[] = JSON.parse(stored);
-    cachedAlerts = alerts.sort((a, b) => b.timestamp - a.timestamp);
-    return cachedAlerts;
-  } catch (error) {
-    console.error("[AlertService] Error reading alerts:", error);
-    return [];
-  }
+  return [...inMemoryAlerts].sort((a, b) => b.timestamp - a.timestamp);
 }
 
 /**
- * Save alerts array to localStorage and update cache.
+ * Save alerts array to in-memory store.
  */
 export function saveAlerts(alerts: Alert[]): void {
-  try {
-    const sortedAlerts = [...alerts].sort((a, b) => b.timestamp - a.timestamp);
-    localStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify(sortedAlerts));
-    cachedAlerts = sortedAlerts;
-  } catch (error) {
-    console.error("[AlertService] Error saving alerts:", error);
-  }
+  inMemoryAlerts = [...alerts].sort((a, b) => b.timestamp - a.timestamp);
+}
+
+/**
+ * Clear in-memory alerts (for resets and testing)
+ */
+export function clearAlerts(): void {
+  inMemoryAlerts = [];
 }
 
 /**

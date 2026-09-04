@@ -24,12 +24,25 @@ export interface PatternRisk {
   confidence: number;
 }
 
-const SAFETY_CACHE_KEY = "ai_safety_cache";
-const PATTERN_CACHE_KEY = "ai_pattern_cache";
+// In-memory safety and pattern caches for child session privacy (never persisted to localStorage)
+const safetyCache: Record<string, RiskResult> = {};
+const patternCache: Record<string, PatternRisk> = {};
+
+/**
+ * Clear in-memory safety caches (for resets and testing)
+ */
+export function clearSafetyCaches(): void {
+  for (const key of Object.keys(safetyCache)) {
+    delete safetyCache[key];
+  }
+  for (const key of Object.keys(patternCache)) {
+    delete patternCache[key];
+  }
+}
 
 /**
  * Detect risky content in a message using LLM-based semantic analysis.
- * Uses localStorage for caching to avoid redundant API calls.
+ * Uses an in-memory cache to avoid redundant API calls.
  */
 export async function detectRiskyMessage(message: string): Promise<RiskResult> {
   const normalized = message.trim().toLowerCase();
@@ -38,9 +51,8 @@ export async function detectRiskyMessage(message: string): Promise<RiskResult> {
   const isStrict = isStrictModeEnabled();
   
   // 1. Check Cache
-  const cache = JSON.parse(localStorage.getItem(SAFETY_CACHE_KEY) || "{}");
-  if (cache[normalized]) {
-    return cache[normalized];
+  if (safetyCache[normalized]) {
+    return safetyCache[normalized];
   }
 
   try {
@@ -59,13 +71,12 @@ export async function detectRiskyMessage(message: string): Promise<RiskResult> {
     }
 
     // 2. Store in Cache
-    cache[normalized] = result;
+    safetyCache[normalized] = result;
     // Limit cache size to 100 entries
-    const keys = Object.keys(cache);
+    const keys = Object.keys(safetyCache);
     if (keys.length > 100) {
-      delete cache[keys[0]];
+      delete safetyCache[keys[0]];
     }
-    localStorage.setItem(SAFETY_CACHE_KEY, JSON.stringify(cache));
 
     return result;
   } catch (error) {
@@ -99,22 +110,20 @@ export async function analyzeBehaviorPattern(messages: { text: string; timestamp
   const lastMsg = messages[messages.length - 1];
   const cacheKey = `pattern-${messages.length}-${lastMsg.timestamp}`;
   
-  const cache = JSON.parse(localStorage.getItem(PATTERN_CACHE_KEY) || "{}");
-  if (cache[cacheKey]) {
-    return cache[cacheKey];
+  if (patternCache[cacheKey]) {
+    return patternCache[cacheKey];
   }
 
   try {
     const result: PatternRisk = await post<PatternRisk>(API_ENDPOINTS.analyzePattern, { messages });
 
     // Cache the result
-    cache[cacheKey] = result;
+    patternCache[cacheKey] = result;
     // Limit cache size
-    const keys = Object.keys(cache);
+    const keys = Object.keys(patternCache);
     if (keys.length > 20) {
-      delete cache[keys[0]];
+      delete patternCache[keys[0]];
     }
-    localStorage.setItem(PATTERN_CACHE_KEY, JSON.stringify(cache));
 
     return result;
   } catch (error) {

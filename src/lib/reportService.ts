@@ -1,5 +1,8 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { getActivity } from "./activity";
+import { getAlerts } from "./alerts/alertService";
+import { getCachedIntelligence } from "./intelligence/index";
 
 export interface ReportSection {
   heading: string;
@@ -37,7 +40,7 @@ export interface ReportData {
  * Extracts specific metrics from chat history and alerts
  */
 export function extractStructuredData(): ExtractedData {
-  const activities = JSON.parse(localStorage.getItem("child_activity") || "[]");
+  const activities = getActivity();
   
   // Filter ONLY user messages (assuming they are in child_activity as userText)
   // Our system stores both userText and aiText in the same activity object.
@@ -162,37 +165,25 @@ export function extractStructuredData(): ExtractedData {
 }
 
 /**
- * Gather all relevant data from localStorage
+ * Gather all relevant app data from in-memory stores and configuration
  */
 export function gatherAllAppData() {
-  console.log("[ReportService] Gathering app data from localStorage...");
-  
-  // Use production-grade intelligence cache key
-  const INTELLIGENCE_CACHE_KEY = "ai_intelligence_cache";
-  const intelligenceCache = localStorage.getItem(INTELLIGENCE_CACHE_KEY);
-  let intelligence = {};
-  if (intelligenceCache) {
-    try {
-      const parsed = JSON.parse(intelligenceCache);
-      intelligence = parsed.data || {};
-    } catch (e) {
-      console.error("[ReportService] Error parsing intelligence cache:", e);
-    }
-  }
+  const cachedIntelligence = getCachedIntelligence();
+  const intelligence = cachedIntelligence?.data || {};
 
-  const alerts = localStorage.getItem("child_ai_alerts") || "[]";
-  const activities = localStorage.getItem("child_activity") || "[]"; // Fixed key
-  const growthHistory = localStorage.getItem("child_ai_growth_history") || "[]";
+  const alerts = getAlerts();
+  const activities = getActivity();
+  const growthHistory: any[] = [];
   const screenTime = localStorage.getItem("child_ai_screen_time") || "{}";
   const policy = localStorage.getItem("child_ai_policy") || "{}";
 
   const extractedData = extractStructuredData();
 
   return {
-    alerts: JSON.parse(alerts),
-    activities: JSON.parse(activities),
+    alerts,
+    activities,
     intelligence, // Real production intelligence
-    growthHistory: JSON.parse(growthHistory),
+    growthHistory,
     screenTime: JSON.parse(screenTime),
     policy: JSON.parse(policy),
     extractedData,

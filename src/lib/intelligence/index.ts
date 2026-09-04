@@ -3,12 +3,13 @@ import { analyzeChildBehavior, getDecisionInsights } from "./analyzer";
 import { calculateHybridMetrics } from "./scorer";
 import { Activity, IntelligenceMetrics, CachedIntelligence } from "./types";
 
-const INTELLIGENCE_CACHE_KEY = "ai_intelligence_cache";
+// In-memory cache for intelligence analysis (never persisted to localStorage)
+let inMemoryIntelligenceCache: CachedIntelligence | null = null;
 const ANALYSIS_DEBOUNCE_MS = 10 * 1000; // 10 seconds debounce
 
 /**
  * Coordination of the production-grade intelligence engine.
- * - Cache LLM results in localStorage
+ * - Cache LLM results in memory
  * - Only re-run analysis when new messages are added
  * - Debounce analysis calls
  * - Perform hybrid scoring and anti-gaming logic
@@ -32,11 +33,10 @@ export async function getIntelligenceMetrics(activities: Activity[]): Promise<In
   }
 
   // 1. Check cache for valid analysis
-  const cached = localStorage.getItem(INTELLIGENCE_CACHE_KEY);
+  const cachedObj = inMemoryIntelligenceCache;
   let history: { score: number; timestamp: number }[] = [];
   
-  if (cached) {
-    const cachedObj: CachedIntelligence = JSON.parse(cached);
+  if (cachedObj) {
     history = cachedObj.history || [];
     
     // Only use cache if activity count hasn't changed OR if it's within the debounce window
@@ -73,7 +73,21 @@ export async function getIntelligenceMetrics(activities: Activity[]): Promise<In
     timestamp: Date.now(),
     history: updatedHistory
   };
-  localStorage.setItem(INTELLIGENCE_CACHE_KEY, JSON.stringify(cacheData));
+  inMemoryIntelligenceCache = cacheData;
 
   return metrics;
+}
+
+/**
+ * Get current in-memory cached intelligence (e.g. for reports or testing)
+ */
+export function getCachedIntelligence(): CachedIntelligence | null {
+  return inMemoryIntelligenceCache;
+}
+
+/**
+ * Clear in-memory intelligence cache (for resets and testing)
+ */
+export function clearIntelligenceCache(): void {
+  inMemoryIntelligenceCache = null;
 }

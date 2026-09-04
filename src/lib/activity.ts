@@ -136,21 +136,22 @@ export function getChildStats(): ChildStats {
   };
 }
 
+// In-memory activity store for child session privacy (never persisted to localStorage)
+let inMemoryActivities: Activity[] = [];
+
 /**
- * Save a new activity to localStorage
+ * Save a new activity to in-memory state
  * @param activity - The activity object to save
  */
 export function saveActivity(activity: Activity): void {
   try {
-    const existing = JSON.parse(localStorage.getItem("child_activity") || "[]");
-    
     // Add new activity at the beginning (newest first)
-    existing.unshift(activity);
+    inMemoryActivities.unshift(activity);
     
     // Limit to last 50 activities for better data-driven insights
-    const trimmed = existing.slice(0, 50);
-    
-    localStorage.setItem("child_activity", JSON.stringify(trimmed));
+    if (inMemoryActivities.length > 50) {
+      inMemoryActivities = inMemoryActivities.slice(0, 50);
+    }
   } catch (error) {
     console.error("[Activity] Error saving activity:", error);
   }
@@ -170,16 +171,18 @@ export interface ActivitySummary {
 }
 
 /**
- * Get all activities from localStorage
+ * Get all activities from in-memory state
  * @returns Array of activities
  */
 export function getActivity(): Activity[] {
-  try {
-    return JSON.parse(localStorage.getItem("child_activity") || "[]");
-  } catch (error) {
-    console.error("[Activity] Error reading activity:", error);
-    return [];
-  }
+  return [...inMemoryActivities];
+}
+
+/**
+ * Clear in-memory activities (for resets and testing)
+ */
+export function clearActivities(): void {
+  inMemoryActivities = [];
 }
 
 /**

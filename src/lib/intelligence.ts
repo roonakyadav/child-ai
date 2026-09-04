@@ -3,7 +3,7 @@
  * Redesigned to use LLM-based semantic analysis instead of keyword counting.
  */
 
-import { Activity } from "./activity";
+import { Activity, getActivity } from "./activity";
 import { getIntelligenceMetrics } from "./intelligence/index";
 import { IntelligenceMetrics } from "./intelligence/types";
 import { Alert } from "@/types";
@@ -15,7 +15,7 @@ export type { IntelligenceMetrics, Alert };
  * This is an async function because it may involve LLM analysis.
  */
 export async function getLatestIntelligence(): Promise<IntelligenceMetrics> {
-  const activities = JSON.parse(localStorage.getItem("child_activity") || "[]") as Activity[];
+  const activities = getActivity();
   return getIntelligenceMetrics(activities);
 }
 

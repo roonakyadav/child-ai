@@ -1,38 +1,37 @@
 import { Intervention, InteractionOutcome } from "@/types";
 import { post } from "../apiClient";
 
-const INTERVENTIONS_STORAGE_KEY = "interventions";
+// In-memory intervention store for child session privacy (never persisted to localStorage)
+let inMemoryInterventions: Intervention[] = [];
 
 /**
- * Saves an intervention to localStorage.
+ * Saves an intervention to in-memory store.
  */
 export function saveIntervention(intervention: Intervention): void {
-  const interventions = getInterventions();
-  localStorage.setItem(INTERVENTIONS_STORAGE_KEY, JSON.stringify([intervention, ...interventions]));
+  inMemoryInterventions = [intervention, ...inMemoryInterventions];
 }
 
 /**
- * Retrieves all interventions from localStorage.
+ * Retrieves all interventions from in-memory store.
  */
 export function getInterventions(): Intervention[] {
-  try {
-    const stored = localStorage.getItem(INTERVENTIONS_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error("[InterventionService] Error reading interventions:", error);
-    return [];
-  }
+  return [...inMemoryInterventions];
+}
+
+/**
+ * Clear in-memory interventions (for resets and testing)
+ */
+export function clearInterventions(): void {
+  inMemoryInterventions = [];
 }
 
 /**
  * Updates an existing intervention with its outcome.
  */
 export function updateInterventionOutcome(id: string, outcome: InteractionOutcome): void {
-  const interventions = getInterventions();
-  const updated = interventions.map((i) =>
+  inMemoryInterventions = inMemoryInterventions.map((i) =>
     i.id === id ? { ...i, outcome } : i
   );
-  localStorage.setItem(INTERVENTIONS_STORAGE_KEY, JSON.stringify(updated));
 }
 
 /**
@@ -84,6 +83,6 @@ export function addMessageToActiveInterventions(text: string): void {
   });
 
   if (updated) {
-    localStorage.setItem(INTERVENTIONS_STORAGE_KEY, JSON.stringify(newInterventions));
+    inMemoryInterventions = newInterventions;
   }
 }

@@ -23,7 +23,6 @@ export interface UsageSession {
 }
 
 const SETTINGS_KEY = "screen_time_settings";
-const SESSIONS_KEY = "usage_sessions";
 
 export const DEFAULT_SETTINGS: ScreenTimeSettings = getConfig().screenTime.defaultSettings as any;
 
@@ -51,24 +50,19 @@ export function setScreenTimeSettings(settings: ScreenTimeSettings): void {
   }
 }
 
+// In-memory usage sessions store for child session privacy (never persisted to localStorage)
+let inMemorySessions: UsageSession[] = [];
+
 /**
- * Get all recorded usage sessions for today
+ * Get all recorded usage sessions for today from in-memory state
  */
 export function getTodaySessions(): UsageSession[] {
-  try {
-    const data = localStorage.getItem(SESSIONS_KEY);
-    const sessions: UsageSession[] = data ? JSON.parse(data) : [];
-    
-    // Filter to only include sessions from today
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const todayTs = startOfToday.getTime();
+  // Filter to only include sessions from today
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayTs = startOfToday.getTime();
 
-    return sessions.filter(s => s.start >= todayTs);
-  } catch (error) {
-    console.error("[ScreenTime] Error reading sessions:", error);
-    return [];
-  }
+  return inMemorySessions.filter(s => s.start >= todayTs);
 }
 
 /**
@@ -81,22 +75,20 @@ export function getUsedMinutesToday(): number {
 }
 
 /**
- * Record a new session segment
+ * Record a new session segment in memory
  */
 export function addUsageSession(start: number, end: number): void {
-  try {
-    const data = localStorage.getItem(SESSIONS_KEY);
-    const sessions: UsageSession[] = data ? JSON.parse(data) : [];
-    
-    // Keep only last 30 days of sessions to prevent storage bloat
-    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    const cleanedSessions = sessions.filter(s => s.start > thirtyDaysAgo);
-    
-    cleanedSessions.push({ start, end });
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(cleanedSessions));
-  } catch (error) {
-    console.error("[ScreenTime] Error saving session:", error);
-  }
+  // Keep only last 30 days of sessions in memory
+  const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  inMemorySessions = inMemorySessions.filter(s => s.start > thirtyDaysAgo);
+  inMemorySessions.push({ start, end });
+}
+
+/**
+ * Clear in-memory usage sessions (for resets and testing)
+ */
+export function clearUsageSessions(): void {
+  inMemorySessions = [];
 }
 
 /**
