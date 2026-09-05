@@ -8,6 +8,7 @@ import { getConfig } from "@/lib/configStore";
 import { post } from "@/lib/apiClient";
 import { deleteServerParentConfig } from "@/lib/parentConfigClient";
 import { clearChildSessionData } from "@/lib/childSession";
+import { safeError } from "@/lib/safeLogger";
 
 const ParentSettings = () => {
   const config = getConfig();
@@ -42,7 +43,6 @@ const ParentSettings = () => {
     setStatus("Gathering all conversation and safety data...");
     
     try {
-      console.log("Sending data:", data);
       setProgress(15);
       
       setStatus("AI is analyzing 4 pages of developmental patterns...");
@@ -80,9 +80,12 @@ const ParentSettings = () => {
       }, 3000);
 
     } catch (error) {
-      console.error("[Report] Generation error:", error);
-      setStatus(`Error: ${error instanceof Error ? error.message : 'Could not generate report'}. Please try again.`);
-      setTimeout(() => setIsGenerating(false), 5000);
+      safeError("Report generation error", error);
+      setStatus("Could not generate report. Please try again.");
+      setTimeout(() => {
+        setIsGenerating(false);
+        setStatus("");
+      }, 5000);
     }
   };
 

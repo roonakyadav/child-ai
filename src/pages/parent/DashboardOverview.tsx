@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { post } from "@/lib/apiClient";
+import { safeError } from "@/lib/safeLogger";
 import {
   Clock,
   MessageSquare,
@@ -149,10 +150,10 @@ const DashboardOverview = () => {
           setAiInsights(data);
           inMemoryInsightsCache = { data, timestamp: Date.now(), activityCount: totalQuestions.toString() };
         } else {
-          console.error("[Dashboard] Invalid insights schema received:", data);
+          safeError("Dashboard invalid insights schema received");
         }
       } catch (error) {
-        console.error("[Dashboard] Error fetching AI insights:", error);
+        safeError("Dashboard error fetching AI insights", error);
       } finally {
         setIsGenerating(false);
       }
@@ -200,6 +201,7 @@ const DashboardOverview = () => {
     };
   } | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
   const [insightType, setInsightType] = useState<"safety" | "learning" | "engagement">("learning");
 
   // State for Instant Alert Banner
@@ -300,9 +302,12 @@ const DashboardOverview = () => {
         markAlertHandled(alertData.id);
         setActiveAlert(null);
         alert(`✨ Conversation Guided. The AI was instructed to redirect using: "${suggestion}"`);
+      } else {
+        alert("Unable to generate redirection suggestion right now. Please try again.");
       }
     } catch (error) {
-      console.error("[Dashboard] Error guiding conversation:", error);
+      safeError("Dashboard error guiding conversation", error);
+      alert("Unable to generate redirection suggestion right now. Please try again.");
     }
   };
 
@@ -406,6 +411,7 @@ const DashboardOverview = () => {
     const type = getInsightType(insight);
     setIsExplaining(true);
     setDeepAnalysis(null);
+    setExplainError(null);
     setInsightType(type);
     
     try {
@@ -449,13 +455,14 @@ const DashboardOverview = () => {
       });
         
       // Signal Filtering: Limit to max 3 relevant signals
-      if (data.signals) {
+      if (data && data.signals) {
         data.signals = Array.from(new Set(data.signals)).slice(0, 3);
       }
 
       setDeepAnalysis(data);
     } catch (error) {
-      console.error("[Dashboard] Error explaining insight:", error);
+      safeError("Dashboard error explaining insight", error);
+      setExplainError("Unable to analyze this insight right now. Please try again.");
     }
   }
 
@@ -876,7 +883,21 @@ const DashboardOverview = () => {
             </div>
           </div>
           
-          {!deepAnalysis ? (
+          {explainError ? (
+            <div className="flex items-center justify-between p-5 bg-destructive/10 rounded-2xl border border-destructive/20 text-destructive">
+              <p className="text-xs font-bold">{explainError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setExplainError(null);
+                  setIsExplaining(false);
+                }}
+                className="text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-xl bg-destructive text-white hover:opacity-90 transition-opacity ml-4"
+              >
+                Close
+              </button>
+            </div>
+          ) : !deepAnalysis ? (
             <div className="flex items-center gap-4 py-6 bg-muted/20 rounded-3xl px-6">
               <Loader className={`h-5 w-5 animate-spin ${
                 insightType === 'safety' ? 'text-destructive' :

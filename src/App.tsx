@@ -17,6 +17,7 @@ import ScreenTimeControls from "./pages/parent/ScreenTimeControls";
 import ParentSettings from "./pages/parent/ParentSettings";
 import PolicySettings from "./pages/parent/PolicySettings";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -33,18 +34,41 @@ const App = () => (
       >
         <Routes>
           {/* Child/Public Routes */}
-          <Route path="/" element={<Index />} />
+          <Route
+            path="/"
+            element={
+              <ErrorBoundary variant="child">
+                <Index />
+              </ErrorBoundary>
+            }
+          />
           
           {/* Parent Auth Entry */}
-          <Route path="/parent" element={<PinEntry />} />
-          <Route path="/parent/setup" element={<PinSetup />} />
+          <Route
+            path="/parent"
+            element={
+              <ErrorBoundary variant="parent">
+                <PinEntry />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/parent/setup"
+            element={
+              <ErrorBoundary variant="parent">
+                <PinSetup />
+              </ErrorBoundary>
+            }
+          />
           
           {/* Protected Parent Dashboard Routes */}
           <Route
             path="/parent-dashboard"
             element={
               <ProtectedRoute>
-                <ParentLayout />
+                <ErrorBoundary variant="parent">
+                  <ParentLayout />
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           >

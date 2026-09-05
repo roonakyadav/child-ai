@@ -4,6 +4,7 @@ import { getAlerts, markAlertHandled } from "@/lib/alerts/alertService";
 import { Alert } from "@/types";
 import { useState, useEffect } from "react";
 import { askParentAssistant } from "@/lib/groq";
+import { safeError } from "@/lib/safeLogger";
 
 const categoryStyles: Record<string, { label: string; color: string; icon: any }> = {
   violence: { label: "Harmful Content", color: "bg-destructive/10 text-destructive", icon: AlertTriangle },
@@ -47,9 +48,9 @@ const SafetyAlerts = () => {
     try {
       const prompt = `My child said: "${alert.message}". The AI flagged this as "${alert.category}" because "${alert.reason}". How should I talk to my child about this? Provide a script or specific advice to help me handle this situation with empathy and safety in mind. Keep it under 100 words.`;
       const advice = await askParentAssistant(prompt);
-      setCoachingAdvice(advice);
+      setCoachingAdvice(advice || "Sorry, I couldn't generate advice right now. Please try again.");
     } catch (error) {
-      console.error("[SafetyAlerts] Coaching failed:", error);
+      safeError("SafetyAlerts coaching failed", error);
       setCoachingAdvice("Sorry, I couldn't generate advice right now. Please try again.");
     } finally {
       setIsCoaching(false);

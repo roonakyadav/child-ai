@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { getActivity } from "@/lib/activity";
 import { getEngagementIntelligence, EngagementIntelligence } from "@/lib/engagement";
+import { safeError } from "@/lib/safeLogger";
 import { 
   TrendingUp, 
   AlertTriangle, 
@@ -51,9 +52,14 @@ const UsageAnalytics = () => {
   useEffect(() => {
     async function fetchIntelligence() {
       setIsLoading(true);
-      const data = await getEngagementIntelligence(activities);
-      setIntelligence(data);
-      setIsLoading(false);
+      try {
+        const data = await getEngagementIntelligence(activities);
+        setIntelligence(data);
+      } catch (err) {
+        safeError("UsageAnalytics fetch intelligence error", err);
+      } finally {
+        setIsLoading(false);
+      }
     }
     fetchIntelligence();
   }, [activities.length]);

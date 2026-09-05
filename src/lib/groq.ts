@@ -9,6 +9,7 @@ import { logInteraction } from "@/lib/activityLogger";
 import { getIntentState, setIntent } from "@/lib/intentStore";
 import { getConfig } from "@/lib/configStore";
 import { post } from "./apiClient";
+import { safeError, safeWarn } from "./safeLogger";
 
 const config = getConfig();
 const GROQ_MODEL = config.api.model;
@@ -88,10 +89,10 @@ export async function askGroq(prompt: string, intent?: string): Promise<string |
       return aiText;
     }
 
-    console.warn("[Groq] No choices in backend response");
+    safeWarn("Groq", "No choices in backend response");
     return null;
   } catch (error) {
-    console.error("[Groq] Request failed:", error);
+    safeError("Groq request failed", error);
     return null;
   }
 }
@@ -116,7 +117,7 @@ export async function askParentAssistant(prompt: string): Promise<string | null>
     });
     return data.choices?.[0]?.message?.content || null;
   } catch (error) {
-    console.error("[Groq] Parent assistant call failed:", error);
+    safeError("Parent assistant call failed", error);
     return null;
   }
 }

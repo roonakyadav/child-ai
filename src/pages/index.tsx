@@ -23,6 +23,7 @@ import { Lock, Timer, Heart, ShieldAlert, Hourglass } from "lucide-react";
 import { AIMode } from "@/lib/modes";
 import { InteractionContext } from "@/types";
 import { getConfig } from "@/lib/configStore";
+import { safeError } from "@/lib/safeLogger";
 
 interface Message {
   text: string;
@@ -149,224 +150,257 @@ const Index = () => {
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
-    // Layer 1: Semantic Risk Detection
-    const risk = await detectRiskyMessage(text);
-    
-    // Create alert if high risk
-    await createAlert(text, risk);
-
-    // Predictive Risk Analysis (Async, non-blocking)
-    const history = getMessages();
-    analyzeEarlyRisk([...history, { role: "user", content: text }].map(m => ({ text: m.content, timestamp: Date.now() })))
-      .then(earlyRisk => {
-        if (earlyRisk.early_risk && earlyRisk.confidence > 70) {
-          createEarlyWarningAlert(text, earlyRisk);
-        }
-      })
-      .catch(err => console.error("[Chat] Early risk analysis failed:", err));
-
-    // Analyze messages for intelligence metrics (Async)
-    const intelligenceData = analyzeMessages([...history, { role: "user", content: text }].map(m => ({
-      role: m.role as "user" | "assistant",
-      text: m.content
-    })));
-    saveIntelligenceMetrics(intelligenceData);
-
-    // Track for auto-reset of intervention mode
-    trackAndAutoReset();
-    
-    // Track message for intervention outcome analysis
-    addMessageToActiveInterventions(text);
-
-    // --- Interaction Context Handling (DETERMINISTIC EVALUATION) ---
-    const currentIntentState = getIntentState();
-    const activeQuiz = currentIntentState.activeQuiz;
-    const isStopCommand = /stop quiz|quit|exit|cancel quiz/i.test(text);
-
-    if (activeQuiz) {
-      if (isStopCommand) {
-        setActiveQuiz(null);
-        setMessages((prev) => [...prev, { text: "Okay! Let's do something else. What's on your mind? 😊", isAI: true }]);
-        setIsLoading(false);
-        return;
-      }
-
-      const normalizedInput = text.trim().toUpperCase();
-      const options = activeQuiz.options;
+    try {
+      // Layer 1: Semantic Risk Detection
+      const risk = await detectRiskyMessage(text);
       
-      // 1. Direct letter match (A, B, C, D)
-      let matchedLabel: "A" | "B" | "C" | "D" | null = null;
-      if (/^[A-D]$/.test(normalizedInput)) {
-        matchedLabel = normalizedInput as "A" | "B" | "C" | "D";
-      } else {
-        // 2. Text match (check if user typed the option text)
-        const entries = Object.entries(options) as [("A" | "B" | "C" | "D"), string][];
-        const match = entries.find(([_, value]) => 
-          normalizedInput.includes(value.toUpperCase()) || 
-          value.toUpperCase().includes(normalizedInput)
-        );
-        if (match) matchedLabel = match[0];
-      }
+      // Create alert if high risk
+      await createAlert(text, risk);
 
-      if (matchedLabel) {
-        const isCorrect = matchedLabel === activeQuiz.correctAnswer;
-        
-        // Use AI ONLY for tone and personalized feedback after we determine correctness
-        const feedbackPrompt = `The user answered "${text}" which corresponds to option ${matchedLabel} ("${options[matchedLabel]}").
-        The question was: "${activeQuiz.question}".
-        This is ${isCorrect ? 'CORRECT' : 'INCORRECT'}. 
-        The true correct answer was ${activeQuiz.correctAnswer}: ${options[activeQuiz.correctAnswer]}.
-        EXPLANATION: ${activeQuiz.explanation}.
-        
-        STRICT RULES:
-        1. Confirm if they were right or wrong clearly but kindly.
-        2. Use the provided EXPLANATION to teach them.
-        3. Keep the tone fun and encouraging.
-        4. Do NOT ask another quiz question yet.`;
-        
-        const aiText = await askGroq(feedbackPrompt, "quiz");
-        
-        if (aiText) {
-          setMessages((prev) => [...prev, { text: aiText, isAI: true, meta: { status: "safe", reason: "Quiz Feedback" } }]);
-        }
-        
-        setActiveQuiz(null); // Clear quiz state after answer
-        setIsLoading(false);
-        return;
-      } else {
-        // Mode Consistency: User didn't give a clear answer, so prompt them again
-        const fallbackPrompt = `The child said "${text}" but I'm waiting for an answer to this quiz: "${activeQuiz.question}". 
-        Options are: A: ${options.A}, B: ${options.B}, C: ${options.C}, D: ${options.D}.
-        Kindly remind them to pick one of the options (A, B, C, or D) or say "stop quiz" to quit.`;
-        
-        const aiText = await askGroq(fallbackPrompt, "quiz");
-        if (aiText) {
-          setMessages((prev) => [...prev, { text: aiText, isAI: true }]);
-        }
-        setIsLoading(false);
-        return;
-      }
-    }
+      // Predictive Risk Analysis (Async, non-blocking)
+      const history = getMessages();
+      analyzeEarlyRisk([...history, { role: "user", content: text }].map(m => ({ text: m.content, timestamp: Date.now() })))
+        .then(earlyRisk => {
+          if (earlyRisk.early_risk && earlyRisk.confidence > 70) {
+            createEarlyWarningAlert(text, earlyRisk);
+          }
+        })
+        .catch(err => safeError("Early risk analysis failed", err));
 
-    if (text.toLowerCase().includes("quiz me")) {
-      setIsLoading(true);
-      const quiz = await generateQuiz();
+      // Analyze messages for intelligence metrics (Async)
+      const intelligenceData = analyzeMessages([...history, { role: "user", content: text }].map(m => ({
+        role: m.role as "user" | "assistant",
+        text: m.content
+      })));
+      saveIntelligenceMetrics(intelligenceData);
+
+      // Track for auto-reset of intervention mode
+      trackAndAutoReset();
       
-      if (quiz) {
-        // Save structured state
-        setActiveQuiz(quiz);
+      // Track message for intervention outcome analysis
+      addMessageToActiveInterventions(text);
 
-        const optionsText = Object.entries(quiz.options).map(([k, v]) => `${k}: ${v}`).join("\n");
-        const quizPrompt = `Ask this quiz question to the child: "${quiz.question}". 
-        OPTIONS:
-        ${optionsText}
-        Make it sound exciting and friendly.`;
+      // --- Interaction Context Handling (DETERMINISTIC EVALUATION) ---
+      const currentIntentState = getIntentState();
+      const activeQuiz = currentIntentState.activeQuiz;
+      const isStopCommand = /stop quiz|quit|exit|cancel quiz/i.test(text);
+
+      if (activeQuiz) {
+        if (isStopCommand) {
+          setActiveQuiz(null);
+          setMessages((prev) => [...prev, { text: "Okay! Let's do something else. What's on your mind? 😊", isAI: true }]);
+          setIsLoading(false);
+          return;
+        }
+
+        const normalizedInput = text.trim().toUpperCase();
+        const options = activeQuiz.options;
         
-        const aiText = await askGroq(quizPrompt, "quiz");
+        // 1. Direct letter match (A, B, C, D)
+        let matchedLabel: "A" | "B" | "C" | "D" | null = null;
+        if (/^[A-D]$/.test(normalizedInput)) {
+          matchedLabel = normalizedInput as "A" | "B" | "C" | "D";
+        } else {
+          // 2. Text match (check if user typed the option text)
+          const entries = Object.entries(options) as [("A" | "B" | "C" | "D"), string][];
+          const match = entries.find(([_, value]) => 
+            normalizedInput.includes(value.toUpperCase()) || 
+            value.toUpperCase().includes(normalizedInput)
+          );
+          if (match) matchedLabel = match[0];
+        }
+
+        if (matchedLabel) {
+          const isCorrect = matchedLabel === activeQuiz.correctAnswer;
+          
+          // Use AI ONLY for tone and personalized feedback after we determine correctness
+          const feedbackPrompt = `The user answered "${text}" which corresponds to option ${matchedLabel} ("${options[matchedLabel]}").
+          The question was: "${activeQuiz.question}".
+          This is ${isCorrect ? 'CORRECT' : 'INCORRECT'}. 
+          The true correct answer was ${activeQuiz.correctAnswer}: ${options[activeQuiz.correctAnswer]}.
+          EXPLANATION: ${activeQuiz.explanation}.
+          
+          STRICT RULES:
+          1. Confirm if they were right or wrong clearly but kindly.
+          2. Use the provided EXPLANATION to teach them.
+          3. Keep the tone fun and encouraging.
+          4. Do NOT ask another quiz question yet.`;
+          
+          const aiText = await askGroq(feedbackPrompt, "quiz");
+          
+          if (aiText) {
+            setMessages((prev) => [...prev, { text: aiText, isAI: true, meta: { status: "safe", reason: "Quiz Feedback" } }]);
+          } else {
+            const fallbackFeedback = isCorrect ? "Great job! That's correct! 🎉" : "Good try! Keep learning! 💪";
+            setMessages((prev) => [...prev, { text: fallbackFeedback, isAI: true, meta: { status: "safe", reason: "Quiz Feedback" } }]);
+          }
+          
+          setActiveQuiz(null); // Clear quiz state after answer
+          setIsLoading(false);
+          return;
+        } else {
+          // Mode Consistency: User didn't give a clear answer, so prompt them again
+          const fallbackPrompt = `The child said "${text}" but I'm waiting for an answer to this quiz: "${activeQuiz.question}". 
+          Options are: A: ${options.A}, B: ${options.B}, C: ${options.C}, D: ${options.D}.
+          Kindly remind them to pick one of the options (A, B, C, or D) or say "stop quiz" to quit.`;
+          
+          const aiText = await askGroq(fallbackPrompt, "quiz");
+          if (aiText) {
+            setMessages((prev) => [...prev, { text: aiText, isAI: true }]);
+          } else {
+            setMessages((prev) => [...prev, { text: "Please pick one of the options (A, B, C, or D) or say 'stop quiz' to quit. 😊", isAI: true }]);
+          }
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      if (text.toLowerCase().includes("quiz me")) {
+        setIsLoading(true);
+        const quiz = await generateQuiz();
         
-        if (aiText) {
+        if (quiz) {
+          // Save structured state
+          setActiveQuiz(quiz);
+
+          const optionsText = Object.entries(quiz.options).map(([k, v]) => `${k}: ${v}`).join("\n");
+          const quizPrompt = `Ask this quiz question to the child: "${quiz.question}". 
+          OPTIONS:
+          ${optionsText}
+          Make it sound exciting and friendly.`;
+          
+          const aiText = await askGroq(quizPrompt, "quiz");
+          
+          if (aiText) {
+            setMessages((prev) => [
+              ...prev, 
+              { 
+                text: aiText, 
+                isAI: true, 
+                meta: { status: "safe", reason: "Structured Quiz Generation" } 
+              }
+            ]);
+          } else {
+            setMessages((prev) => [
+              ...prev,
+              {
+                text: `Here's a quiz for you! ${quiz.question} 🌟\n${optionsText}`,
+                isAI: true,
+                meta: { status: "safe", reason: "Structured Quiz Generation" }
+              }
+            ]);
+          }
+          
+          setIsLoading(false);
+          return;
+        } else {
           setMessages((prev) => [
-            ...prev, 
-            { 
-              text: aiText, 
-              isAI: true, 
-              meta: { status: "safe", reason: "Structured Quiz Generation" } 
+            ...prev,
+            {
+              text: "I couldn't create a quiz question right now. What would you like to explore instead? 🚀",
+              isAI: true
             }
           ]);
+          setIsLoading(false);
+          return;
         }
-        
-        setIsLoading(false);
+      }
+      // ------------------------------------
+
+      if (risk.status === "flagged") {
+        setTimeout(() => {
+          const safeResponse: AIResponse = {
+            text: rewriteUnsafe(text),
+            isAI: true,
+            isBlocked: true,
+            meta: {
+              status: "filtered",
+              reason: risk.reason,
+            },
+          };
+          setMessages((prev) => [...prev, safeResponse]);
+          
+          // Manual logging for blocked messages (since askGroq is bypassed)
+          saveActivity({
+            userText: text,
+            aiText: safeResponse.text,
+            category: getCategory(text),
+            timestamp: Date.now(),
+            status: "filtered",
+            risk: risk,
+          });
+          
+          setIsLoading(false);
+        }, 600);
         return;
       }
-    }
-    // ------------------------------------
 
-    if (risk.status === "flagged") {
-      setTimeout(() => {
-        const safeResponse: AIResponse = {
-          text: rewriteUnsafe(text),
-          isAI: true,
-          isBlocked: true,
-          meta: {
-            status: "filtered",
-            reason: risk.reason,
-          },
-        };
-        setMessages((prev) => [...prev, safeResponse]);
-        
-        // Manual logging for blocked messages (since askGroq is bypassed)
-        saveActivity({
-          userText: text,
-          aiText: safeResponse.text,
-          category: getCategory(text),
-          timestamp: Date.now(),
-          status: "filtered",
-          risk: risk,
-        });
-        
-        setIsLoading(false);
-      }, 600);
-      return;
-    }
-
-    // Handle UNKNOWN status - do not send to normal AI generation
-    if (risk.status === "unknown") {
-      setTimeout(() => {
-        const safeResponse: AIResponse = {
-          text: "I'm having trouble checking if that message is safe right now. Let's try something else! How about we talk about something fun like space, animals, or games? 🚀",
-          isAI: true,
-          isBlocked: true,
-          meta: {
-            status: "unknown",
-            reason: risk.reason,
-          },
-        };
-        setMessages((prev) => [...prev, safeResponse]);
-        
-        // Manual logging for unknown messages (since askGroq is bypassed)
-        saveActivity({
-          userText: text,
-          aiText: safeResponse.text,
-          category: getCategory(text),
-          timestamp: Date.now(),
-          status: "unknown",
-          risk: risk,
-        });
-        
-        setIsLoading(false);
-      }, 600);
-      return;
-    }
-
-    // Layer 2: Call Groq API (now includes global history and logging)
-    try {
-      const aiText = await askGroq(text, intent);
-      
-      if (aiText) {
-        // Track recent topics for anti-repetition (simple extraction)
-        if (intent === "joke") addRecentTopic("joke");
-        if (intent === "story") addRecentTopic("story");
-        if (text.length > 3 && text.length < 20) addRecentTopic(text.toLowerCase());
-
-        const policy = getPolicy();
-        const meta = analyzeResponse(text, aiText, policy);
-        
-        setMessages((prev) => [
-          ...prev,
-          {
-            text: aiText,
+      // Handle UNKNOWN status - do not send to normal AI generation
+      if (risk.status === "unknown") {
+        setTimeout(() => {
+          const safeResponse: AIResponse = {
+            text: "I'm having trouble checking if that message is safe right now. Let's try something else! How about we talk about something fun like space, animals, or games? 🚀",
             isAI: true,
-            meta: meta,
-          },
-        ]);
-      } else {
-        // Fallback logic
+            isBlocked: true,
+            meta: {
+              status: "unknown",
+              reason: risk.reason,
+            },
+          };
+          setMessages((prev) => [...prev, safeResponse]);
+          
+          // Manual logging for unknown messages (since askGroq is bypassed)
+          saveActivity({
+            userText: text,
+            aiText: safeResponse.text,
+            category: getCategory(text),
+            timestamp: Date.now(),
+            status: "unknown",
+            risk: risk,
+          });
+          
+          setIsLoading(false);
+        }, 600);
+        return;
+      }
+
+      // Layer 2: Call Groq API (now includes global history and logging)
+      try {
+        const aiText = await askGroq(text, intent);
+        
+        if (aiText) {
+          // Track recent topics for anti-repetition (simple extraction)
+          if (intent === "joke") addRecentTopic("joke");
+          if (intent === "story") addRecentTopic("story");
+          if (text.length > 3 && text.length < 20) addRecentTopic(text.toLowerCase());
+
+          const policy = getPolicy();
+          const meta = analyzeResponse(text, aiText, policy);
+          
+          setMessages((prev) => [
+            ...prev,
+            {
+              text: aiText,
+              isAI: true,
+              meta: meta,
+            },
+          ]);
+        } else {
+          // Fallback logic
+          const fallbackText = "I'm having a little trouble thinking right now. Let's try again in a moment! 😊";
+          setMessages((prev) => [...prev, { text: fallbackText, isAI: true }]);
+        }
+      } catch (error) {
+        safeError("Chat error getting AI response", error);
         const fallbackText = "I'm having a little trouble thinking right now. Let's try again in a moment! 😊";
         setMessages((prev) => [...prev, { text: fallbackText, isAI: true }]);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("[Chat] Error getting AI response:", error);
-    } finally {
+    } catch (topError) {
+      safeError("Chat handleSend top-level error", topError);
+      const fallbackText = "I'm having a little trouble thinking right now. Let's try again in a moment! 😊";
+      setMessages((prev) => [...prev, { text: fallbackText, isAI: true }]);
       setIsLoading(false);
     }
   };

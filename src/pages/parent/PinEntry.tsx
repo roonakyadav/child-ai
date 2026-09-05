@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Lock, ShieldCheck, AlertCircle } from "lucide-react";
 import { loginWithPin, hasPinConfigured } from "@/lib/auth";
+import { safeError } from "@/lib/safeLogger";
 
 export default function PinEntry() {
   const [pin, setPin] = useState(["", "", "", "", "", ""]);
@@ -63,14 +64,25 @@ export default function PinEntry() {
     if (pinString.length < 4 || pinString.length > 6) return;
 
     setIsSubmitting(true);
-    const isValid = await loginWithPin(pinString);
-    
-    if (isValid) {
-      navigate("/parent-dashboard/overview");
-    } else {
+    try {
+      const isValid = await loginWithPin(pinString);
+      
+      if (isValid) {
+        navigate("/parent-dashboard/overview");
+      } else {
+        setError(true);
+        setIsSubmitting(false);
+        // Shake animation effect
+        setTimeout(() => {
+          setError(false);
+          setPin(["", "", "", "", "", ""]);
+          inputRefs[0].current?.focus();
+        }, 600);
+      }
+    } catch (err) {
+      safeError("PinEntry login error", err);
       setError(true);
       setIsSubmitting(false);
-      // Shake animation effect
       setTimeout(() => {
         setError(false);
         setPin(["", "", "", "", "", ""]);

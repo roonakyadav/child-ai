@@ -6,7 +6,8 @@
  * PIN hash is stored server-side only, never in browser localStorage.
  */
 
-import { post, get } from './apiClient';
+import { post, get, put } from './apiClient';
+import { safeError } from './safeLogger';
 
 /**
  * Validate PIN format (4-6 digits)
@@ -23,7 +24,7 @@ export async function hasPinConfigured(): Promise<boolean> {
     const data = await get<{ configured: boolean }>('/api/auth/parent/status');
     return data.configured === true;
   } catch (error) {
-    console.error('PIN status check error:', error);
+    safeError('PIN status check error', error);
     return false;
   }
 }
@@ -39,7 +40,7 @@ export async function setupPin(pin: string): Promise<void> {
   try {
     await post<{ success: boolean }>('/api/auth/parent/setup', { pin });
   } catch (error) {
-    console.error('PIN setup error:', error);
+    safeError('PIN setup error', error);
     throw new Error('Failed to set up PIN');
   }
 }
@@ -57,7 +58,7 @@ export async function loginWithPin(pin: string): Promise<boolean> {
     const data = await post<{ success: boolean }>('/api/auth/parent/login', { pin });
     return data.success === true;
   } catch (error) {
-    console.error('Login error:', error);
+    safeError('Login error', error);
     return false;
   }
 }
@@ -73,7 +74,7 @@ export async function updatePin(newPin: string): Promise<void> {
   try {
     await post<{ success: boolean }>('/api/auth/parent/update', { pin: newPin });
   } catch (error) {
-    console.error('PIN update error:', error);
+    safeError('PIN update error', error);
     throw new Error('Failed to update PIN');
   }
 }
@@ -87,7 +88,7 @@ export async function verifySession(): Promise<boolean> {
     const data = await get<{ authenticated: boolean }>('/api/auth/parent/session');
     return data.authenticated === true;
   } catch (error) {
-    console.error('Session verification error:', error);
+    safeError('Session verification error', error);
     return false;
   }
 }
@@ -103,7 +104,7 @@ export async function logout(): Promise<void> {
   try {
     await post('/api/auth/parent/logout', {});
   } catch (error) {
-    console.error('Logout error:', error);
+    safeError('Logout error', error);
   }
 
   // Centrally purge all transient child session data

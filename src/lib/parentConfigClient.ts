@@ -7,6 +7,7 @@
 
 import { get, put, post, del } from './apiClient';
 import { API_ENDPOINTS } from './apiConfig';
+import { safeError } from './safeLogger';
 
 export type ScreenTimeMode = 'strict' | 'balanced' | 'learning';
 export type SafetyLevel = 'soft' | 'moderate' | 'strict';
@@ -50,7 +51,7 @@ export async function fetchServerParentConfig(): Promise<ServerParentConfig | nu
     const data = await get<{ config: ServerParentConfig }>(API_ENDPOINTS.parentConfig);
     return data.config;
   } catch (error) {
-    console.error('[ParentConfigClient] Failed to fetch server config:', error);
+    safeError('ParentConfigClient failed to fetch server config', error);
     return null;
   }
 }
@@ -71,7 +72,7 @@ export async function updateServerParentConfig(
     );
     return data.config;
   } catch (error) {
-    console.error('[ParentConfigClient] Failed to update server config:', error);
+    safeError('ParentConfigClient failed to update server config', error);
     throw error;
   }
 }
@@ -152,7 +153,7 @@ export async function migrateLegacyConfigToServer(): Promise<boolean> {
     }
     return false;
   } catch (error) {
-    console.error('[ParentConfigClient] Migration failed:', error);
+    safeError('ParentConfigClient migration failed', error);
     return false;
   }
 }
@@ -165,7 +166,7 @@ export async function deleteServerParentConfig(): Promise<boolean> {
     const res = await del<{ success: boolean; message: string }>(API_ENDPOINTS.parentConfig);
     return res?.success === true;
   } catch (error) {
-    console.error('[ParentConfigClient] Failed to reset server config:', error);
+    safeError('ParentConfigClient failed to reset server config', error);
     return false;
   }
 }
