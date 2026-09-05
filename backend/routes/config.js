@@ -9,6 +9,7 @@ const router = express.Router();
 const { requireParentAuth } = require('../middleware/auth');
 const { validateBody } = require('../validation/middleware');
 const configService = require('../services/configService');
+const logger = require('../lib/logger');
 
 // GET /api/config/parent - Retrieve authoritative parent configuration
 router.get('/parent', requireParentAuth, (req, res) => {
@@ -16,7 +17,7 @@ router.get('/parent', requireParentAuth, (req, res) => {
     const config = configService.getParentConfig();
     res.status(200).json({ config });
   } catch (error) {
-    console.error('[Config] Error retrieving parent configuration:', error.message);
+    logger.error('config.retrieve.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(500).json({ error: 'Failed to retrieve configuration' });
   }
 });
@@ -30,7 +31,7 @@ router.put('/parent', requireParentAuth, validateBody('parentConfigUpdate'), (re
       config: updated
     });
   } catch (error) {
-    console.error('[Config] Error updating parent configuration:', error.message);
+    logger.error('config.update.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(500).json({ error: 'Failed to update configuration' });
   }
 });
@@ -45,7 +46,7 @@ router.post('/parent/migrate', requireParentAuth, validateBody('parentConfigMigr
       config: updated
     });
   } catch (error) {
-    console.error('[Config] Error migrating legacy configuration:', error.message);
+    logger.error('config.migrate.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(500).json({ error: 'Failed to migrate configuration' });
   }
 });
@@ -74,7 +75,7 @@ router.delete('/parent', requireParentAuth, (req, res) => {
       message: 'Parent configuration successfully reset'
     });
   } catch (error) {
-    console.error('[Config] Error resetting parent configuration:', error.message);
+    logger.error('config.reset.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(500).json({ error: 'Failed to reset configuration' });
   }
 });

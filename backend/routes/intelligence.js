@@ -9,6 +9,7 @@ const { aiLimiter } = require('../middleware/rateLimit');
 const { requireParentAuth } = require('../middleware/auth');
 const { validateBody } = require('../validation/middleware');
 const groqHelper = require('../lib/groqHelper');
+const logger = require('../lib/logger');
 
 // POST /api/analyze-intelligence
 router.post('/analyze-intelligence', requireParentAuth, aiLimiter, async (req, res) => {
@@ -83,7 +84,7 @@ router.post('/analyze-intelligence', requireParentAuth, aiLimiter, async (req, r
     if (error.isSafeError) {
       return res.status(500).json({ error: error.message, code: error.code });
     }
-    console.error("[Intelligence Analysis] Server error:", error.message);
+    logger.error('intelligence.analyze.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(500).json({ error: 'Failed to perform intelligence analysis' });
   }
 });
@@ -164,7 +165,7 @@ router.post('/decision-engine', requireParentAuth, aiLimiter, validateBody('deci
         confidence: 75
       });
     }
-    console.error("[Decision Engine] Server error:", error.message);
+    logger.error('intelligence.decision_engine.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(200).json({
       topInsight: "Unable to analyze metrics right now.",
       focusArea: { metric: "Attention Span", value: metrics.attentionSpan },

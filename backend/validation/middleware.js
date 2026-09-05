@@ -1,4 +1,5 @@
 const { schemas } = require('./schemas');
+const logger = require('../lib/logger');
 
 /**
  * Validation middleware factory
@@ -38,7 +39,10 @@ function validateBody(schemaName) {
       }
       
       // Handle other errors (e.g., JSON parsing)
-      console.error('Validation error:', error);
+      logger.warn('validation.failed', {
+        schema: schemaName,
+        errorName: error.name || 'ValidationError'
+      });
       return res.status(400).json({
         error: 'Invalid request',
         details: ['Request body could not be processed']

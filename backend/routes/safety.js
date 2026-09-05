@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { aiLimiter } = require('../middleware/rateLimit');
 const groqHelper = require('../lib/groqHelper');
+const logger = require('../lib/logger');
 
 // POST /api/detect-risk
 router.post('/detect-risk', aiLimiter, async (req, res) => {
@@ -73,7 +74,7 @@ router.post('/detect-risk', aiLimiter, async (req, res) => {
     
     res.status(200).json(parsed);
   } catch (error) {
-    console.error("[Risk Detection] Server error:", error.message);
+    logger.error('safety.detect_risk.failed', { requestId: req.id, errorName: error.name || 'Error' });
     // Fail-closed: return UNKNOWN when analysis is unavailable
     res.status(200).json({
       status: "unknown",
@@ -154,7 +155,7 @@ router.post('/analyze-pattern', aiLimiter, async (req, res) => {
     
     res.status(200).json(parsed);
   } catch (error) {
-    console.error("[Pattern Analysis] Server error:", error.message);
+    logger.error('safety.analyze_pattern.failed', { requestId: req.id, errorName: error.name || 'Error' });
     // Fail-closed: return UNKNOWN when analysis is unavailable
     res.status(200).json({
       pattern_detected: false,
@@ -227,7 +228,7 @@ router.post('/analyze-early-risk', aiLimiter, async (req, res) => {
     
     res.status(200).json(parsed);
   } catch (error) {
-    console.error("[Early Risk Analysis] Server error:", error.message);
+    logger.error('safety.early_warning.failed', { requestId: req.id, errorName: error.name || 'Error' });
     // Fail-closed: return UNKNOWN when analysis is unavailable
     res.status(200).json({
       early_risk: false,

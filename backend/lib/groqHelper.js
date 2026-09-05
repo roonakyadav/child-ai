@@ -30,7 +30,8 @@ async function callGroqAPI({ endpoint, messages, model, temperature, responseFor
   let attempt = 0;
   const maxRetries = 1;
   
-  if (!GROQ_API_KEY) {
+  const apiKey = process.env.GROQ_API_KEY || GROQ_API_KEY;
+  if (!apiKey) {
     logError(endpoint, 'CONFIGURATION_ERROR', 'GROQ_API_KEY not configured', 0);
     throw createSafeError(ERROR_CODES.INTERNAL_ERROR, 'AI service not configured');
   }
@@ -44,7 +45,7 @@ async function callGroqAPI({ endpoint, messages, model, temperature, responseFor
         ...(responseFormat && { response_format: responseFormat })
       }, {
         headers: {
-          "Authorization": `Bearer ${GROQ_API_KEY}`,
+          "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         timeout: GROQ_TIMEOUT_MS
@@ -173,26 +174,41 @@ function createSafeError(code, message) {
   return error;
 }
 
+const logger = require('./logger');
+
 /**
  * Log successful request
  */
 function logSuccess(endpoint, elapsed, status) {
-  console.log(`[Groq] ${endpoint} success - ${elapsed}ms - status: ${status}`);
+  logger.info('ai.request.completed', {
+    endpoint,
+    durationMs: elapsed,
+    status
+  });
 }
 
 /**
  * Log error
  */
 function logError(endpoint, code, message, elapsed, httpStatus = null) {
-  const statusInfo = httpStatus ? ` HTTP ${httpStatus}` : '';
-  console.error(`[Groq] ${endpoint} error - ${code}${statusInfo} - ${elapsed}ms - ${message}`);
+  logger.error('ai.request.failed', {
+    endpoint,
+    code,
+    durationMs: elapsed,
+    httpStatus: httpStatus || undefined
+  });
 }
 
 /**
  * Log retry attempt
  */
 function logRetry(endpoint, attempt, delay) {
-  console.log(`[Groq] ${endpoint} retry ${attempt}/${1} after ${delay}ms`);
+  logger.warn('ai.request.retry', {
+    endpoint,
+    attempt,
+    maxRetries: 1,
+    delayMs: delay
+  });
 }
 
 module.exports = {

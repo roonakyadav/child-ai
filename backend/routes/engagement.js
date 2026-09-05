@@ -8,6 +8,7 @@ const router = express.Router();
 const { aiLimiter } = require('../middleware/rateLimit');
 const { requireParentAuth } = require('../middleware/auth');
 const groqHelper = require('../lib/groqHelper');
+const logger = require('../lib/logger');
 
 // POST /api/analyze-engagement
 router.post('/analyze-engagement', requireParentAuth, aiLimiter, async (req, res) => {
@@ -73,7 +74,7 @@ router.post('/analyze-engagement', requireParentAuth, aiLimiter, async (req, res
         actionRecommendation: "Try again later for engagement insights."
       });
     }
-    console.error("[Engagement Intelligence] Server error:", error.message);
+    logger.error('engagement.analyze.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(200).json({
       statusReason: "Engagement is currently stable with consistent daily usage.",
       trendExplanation: "Usage has been steady throughout the week with no major spikes or drops.",
@@ -143,7 +144,7 @@ router.post('/analyze-sentiment', aiLimiter, async (req, res) => {
         explanation: "AI service temporarily unavailable, defaulting to neutral."
       });
     }
-    console.error("[Sentiment Analysis] Server error:", error.message);
+    logger.error('engagement.sentiment.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(200).json({
       score: 70,
       label: "Neutral",

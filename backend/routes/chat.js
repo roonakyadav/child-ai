@@ -10,6 +10,7 @@ const router = express.Router();
 const { aiLimiter } = require('../middleware/rateLimit');
 const { validateBody } = require('../validation/middleware');
 const groqHelper = require('../lib/groqHelper');
+const logger = require('../lib/logger');
 const { checkOutputGuardrails } = require('../services/outputGuardrailService');
 const { classifyOutputSafety, SAFE_FALLBACK_RESPONSE } = require('../services/outputSafetyService');
 const configService = require('../services/configService');
@@ -73,7 +74,11 @@ router.post('/', aiLimiter, validateBody('chat'), async (req, res) => {
     // 2. Layer 1 Output Gate: Deterministic Server-Side Guardrail
     const guardrailResult = checkOutputGuardrails(generatedText);
     if (guardrailResult.status !== 'safe') {
-      console.log(`[Chat] Deterministic guardrail check: ${guardrailResult.status} (category: ${guardrailResult.category || 'unknown'})`);
+      logger.info('chat.guardrail.checked', {
+        requestId: req.id,
+        status: guardrailResult.status,
+        category: guardrailResult.category || 'unknown'
+      });
 
       if (!response.choices || !response.choices[0]) {
         response.choices = [{ message: { role: 'assistant', content: SAFE_FALLBACK_RESPONSE } }];
@@ -87,7 +92,11 @@ router.post('/', aiLimiter, validateBody('chat'), async (req, res) => {
     // 3. Layer 2 Output Gate: Server-Side AI Output Safety Classifier
     const safetyResult = await classifyOutputSafety(generatedText);
     if (safetyResult.status !== 'safe') {
-      console.log(`[Chat] Output safety check: ${safetyResult.status} (category: ${safetyResult.category || 'unknown'})`);
+      logger.info('chat.output_safety.checked', {
+        requestId: req.id,
+        status: safetyResult.status,
+        category: safetyResult.category || 'unknown'
+      });
 
       if (!response.choices || !response.choices[0]) {
         response.choices = [{ message: { role: 'assistant', content: SAFE_FALLBACK_RESPONSE } }];
@@ -101,7 +110,10 @@ router.post('/', aiLimiter, validateBody('chat'), async (req, res) => {
     if (error.isSafeError) {
       return res.status(500).json({ error: error.message, code: error.code });
     }
-    console.error("[Chat] Server error:", error.message);
+    logger.error('chat.request.failed', {
+      requestId: req.id,
+      errorName: error.name || 'Error'
+    });
     res.status(500).json({ error: 'AI provider error' });
   }
 });

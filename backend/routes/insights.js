@@ -9,6 +9,7 @@ const { aiLimiter } = require('../middleware/rateLimit');
 const { requireParentAuth } = require('../middleware/auth');
 const { validateBody } = require('../validation/middleware');
 const groqHelper = require('../lib/groqHelper');
+const logger = require('../lib/logger');
 
 // POST /api (insights)
 router.post('/', requireParentAuth, aiLimiter, validateBody('insights'), async (req, res) => {
@@ -65,7 +66,7 @@ router.post('/', requireParentAuth, aiLimiter, validateBody('insights'), async (
         ]
       });
     }
-    console.error("[Insights] Server error:", error.message);
+    logger.error('insights.generate.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(200).json({
       keyInsight: "Unable to analyze learning patterns right now.",
       smartInsights: [
@@ -184,7 +185,7 @@ router.post('/deep-analysis', requireParentAuth, aiLimiter, validateBody('deepAn
     if (error.isSafeError) {
       return res.status(500).json({ error: error.message, code: error.code });
     }
-    console.error("[Deep Analysis] Server error:", error.message);
+    logger.error('insights.deep_analysis.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(500).json({ error: 'Failed to perform deep analysis' });
   }
 });

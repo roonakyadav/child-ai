@@ -9,6 +9,7 @@ const { aiLimiter } = require('../middleware/rateLimit');
 const { requireParentAuth } = require('../middleware/auth');
 const { validateBody } = require('../validation/middleware');
 const groqHelper = require('../lib/groqHelper');
+const logger = require('../lib/logger');
 
 // POST /api/generate-full-report
 router.post('/generate-full-report', requireParentAuth, aiLimiter, validateBody('generateFullReport'), async (req, res) => {
@@ -119,7 +120,7 @@ router.post('/generate-full-report', requireParentAuth, aiLimiter, validateBody(
     if (error.isSafeError) {
       return res.status(500).json({ error: error.message, code: error.code });
     }
-    console.error("[Full Report] Server error:", error.message);
+    logger.error('reports.generate.failed', { requestId: req.id, errorName: error.name || 'Error' });
     res.status(500).json({ error: 'Failed to generate report' });
   }
 });

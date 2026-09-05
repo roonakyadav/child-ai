@@ -109,7 +109,8 @@ function loadFromDisk() {
       return mergeConfig(DEFAULT_PARENT_CONFIG, parsed);
     }
   } catch (error) {
-    console.error('[ConfigService] Error reading config store from disk, falling back to defaults:', error.message);
+    const logger = require('../lib/logger');
+    logger.warn('config.read.fallback', { errorName: error.name || 'Error' });
   }
   return deepClone(DEFAULT_PARENT_CONFIG);
 }
