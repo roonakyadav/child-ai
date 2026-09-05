@@ -32,6 +32,15 @@ export default function PinEntry() {
     checkPinStatus();
   }, [navigate]);
 
+  // Lightweight prefetch of the parent dashboard overview while parent enters PIN
+  useEffect(() => {
+    const prefetchTimer = setTimeout(() => {
+      import("./DashboardOverview");
+      import("../../components/ParentLayout");
+    }, 1000);
+    return () => clearTimeout(prefetchTimer);
+  }, []);
+
   // Auto-focus first box on mount (after loading completes)
   useEffect(() => {
     if (!isLoading) {

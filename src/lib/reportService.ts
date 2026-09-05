@@ -1,10 +1,9 @@
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import { getActivity } from "./activity";
 import { getAlerts } from "./alerts/alertService";
 import { getCachedIntelligence } from "./intelligence/index";
 import { getScreenTimeSettings } from "./screen-time";
 import { getPolicy } from "./policy";
+import { safeError } from "./safeLogger";
 
 export interface ReportSection {
   heading: string;
@@ -202,6 +201,12 @@ export async function generatePDFReport(
   console.log("[ReportService] Starting PDF generation with data:", data);
   
   try {
+    const [{ jsPDF }, autoTableModule] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
+    const autoTable = autoTableModule.default || autoTableModule;
+
     const doc = new jsPDF({
       orientation: "p",
       unit: "mm",
@@ -337,7 +342,7 @@ export async function generatePDFReport(
     doc.save(fileName);
     console.log("[ReportService] PDF saved successfully.");
   } catch (error) {
-    console.error("[ReportService] FATAL ERROR during PDF generation:", error);
+    safeError("ReportService failed during PDF generation", error);
     throw error;
   }
 }

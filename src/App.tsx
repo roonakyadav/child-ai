@@ -3,21 +3,25 @@ import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { lazy, Suspense } from "react";
 import Index from "./pages/index";
-import NotFound from "./pages/NotFound";
-import PinEntry from "./pages/parent/PinEntry";
-import PinSetup from "./pages/parent/PinSetup";
-import ParentLayout from "./components/ParentLayout";
-import DashboardOverview from "./pages/parent/DashboardOverview";
-import ActivityFeed from "./pages/parent/ActivityFeed";
-import SafetyAlerts from "./pages/parent/SafetyAlerts";
-import UsageAnalytics from "./pages/parent/UsageAnalytics";
-import LearningIntelligence from "./pages/parent/LearningIntelligence";
-import ScreenTimeControls from "./pages/parent/ScreenTimeControls";
-import ParentSettings from "./pages/parent/ParentSettings";
-import PolicySettings from "./pages/parent/PolicySettings";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
+import SafeSuspenseFallback from "./components/SafeSuspenseFallback";
+
+// Lazy-loaded routes for code splitting
+const PinEntry = lazy(() => import("./pages/parent/PinEntry"));
+const PinSetup = lazy(() => import("./pages/parent/PinSetup"));
+const ParentLayout = lazy(() => import("./components/ParentLayout"));
+const DashboardOverview = lazy(() => import("./pages/parent/DashboardOverview"));
+const ActivityFeed = lazy(() => import("./pages/parent/ActivityFeed"));
+const SafetyAlerts = lazy(() => import("./pages/parent/SafetyAlerts"));
+const UsageAnalytics = lazy(() => import("./pages/parent/UsageAnalytics"));
+const LearningIntelligence = lazy(() => import("./pages/parent/LearningIntelligence"));
+const ScreenTimeControls = lazy(() => import("./pages/parent/ScreenTimeControls"));
+const ParentSettings = lazy(() => import("./pages/parent/ParentSettings"));
+const PolicySettings = lazy(() => import("./pages/parent/PolicySettings"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
@@ -48,7 +52,9 @@ const App = () => (
             path="/parent"
             element={
               <ErrorBoundary variant="parent">
-                <PinEntry />
+                <Suspense fallback={<SafeSuspenseFallback />}>
+                  <PinEntry />
+                </Suspense>
               </ErrorBoundary>
             }
           />
@@ -56,7 +62,9 @@ const App = () => (
             path="/parent/setup"
             element={
               <ErrorBoundary variant="parent">
-                <PinSetup />
+                <Suspense fallback={<SafeSuspenseFallback />}>
+                  <PinSetup />
+                </Suspense>
               </ErrorBoundary>
             }
           />
@@ -67,7 +75,9 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <ErrorBoundary variant="parent">
-                  <ParentLayout />
+                  <Suspense fallback={<SafeSuspenseFallback />}>
+                    <ParentLayout />
+                  </Suspense>
                 </ErrorBoundary>
               </ProtectedRoute>
             }
@@ -84,7 +94,14 @@ const App = () => (
           </Route>
 
           {/* Fallback */}
-          <Route path="*" element={<NotFound />} />
+          <Route
+            path="*"
+            element={
+              <Suspense fallback={<SafeSuspenseFallback />}>
+                <NotFound />
+              </Suspense>
+            }
+          />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

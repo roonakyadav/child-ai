@@ -1,4 +1,6 @@
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Suspense } from "react";
+import { Outlet, useNavigate } from "react-router-dom";
+import SafeSuspenseFallback from "@/components/SafeSuspenseFallback";
 import {
   Sidebar,
   SidebarContent,
@@ -116,7 +118,9 @@ const ParentLayout = () => {
             </div>
           </header>
           <main className="flex-1 overflow-y-auto p-6 sm:p-8 max-w-7xl mx-auto w-full">
-            <Outlet />
+            <Suspense fallback={<SafeSuspenseFallback variant="content" />}>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
       </div>
