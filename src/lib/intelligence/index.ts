@@ -6,6 +6,7 @@ import { Activity, IntelligenceMetrics, CachedIntelligence } from "./types";
 // In-memory cache for intelligence analysis (never persisted to localStorage)
 let inMemoryIntelligenceCache: CachedIntelligence | null = null;
 const ANALYSIS_DEBOUNCE_MS = 10 * 1000; // 10 seconds debounce
+const INTELLIGENCE_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes TTL
 
 /**
  * Coordination of the production-grade intelligence engine.
@@ -37,11 +38,14 @@ export async function getIntelligenceMetrics(activities: Activity[]): Promise<In
   let history: { score: number; timestamp: number }[] = [];
   
   if (cachedObj) {
-    history = cachedObj.history || [];
-    
-    // Only use cache if activity count hasn't changed OR if it's within the debounce window
-    if (cachedObj.activityCount === activities.length || (Date.now() - cachedObj.timestamp < ANALYSIS_DEBOUNCE_MS)) {
-      return cachedObj.data;
+    if (Date.now() - cachedObj.timestamp > INTELLIGENCE_CACHE_TTL_MS) {
+      inMemoryIntelligenceCache = null;
+    } else {
+      history = cachedObj.history || [];
+      // Only use cache if activity count hasn't changed OR if it's within the debounce window
+      if (cachedObj.activityCount === activities.length || (Date.now() - cachedObj.timestamp < ANALYSIS_DEBOUNCE_MS)) {
+        return cachedObj.data;
+      }
     }
   }
 
@@ -82,6 +86,9 @@ export async function getIntelligenceMetrics(activities: Activity[]): Promise<In
  * Get current in-memory cached intelligence (e.g. for reports or testing)
  */
 export function getCachedIntelligence(): CachedIntelligence | null {
+  if (inMemoryIntelligenceCache && (Date.now() - inMemoryIntelligenceCache.timestamp > INTELLIGENCE_CACHE_TTL_MS)) {
+    inMemoryIntelligenceCache = null;
+  }
   return inMemoryIntelligenceCache;
 }
 

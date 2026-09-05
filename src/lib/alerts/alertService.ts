@@ -1,13 +1,25 @@
 import { Alert } from "@/types";
 import { RiskResult } from "../safety";
 
+const MAX_ALERTS = 50;
+const ALERT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 // In-memory alert store for child session privacy (never persisted to localStorage)
 let inMemoryAlerts: Alert[] = [];
+
+/**
+ * Prune alerts that exceed the 24-hour retention window
+ */
+function pruneExpiredAlerts(): void {
+  const now = Date.now();
+  inMemoryAlerts = inMemoryAlerts.filter(a => (now - a.timestamp) < ALERT_TTL_MS);
+}
 
 /**
  * Fetch all alerts, sorted by latest first.
  */
 export function getAlerts(): Alert[] {
+  pruneExpiredAlerts();
   return [...inMemoryAlerts].sort((a, b) => b.timestamp - a.timestamp);
 }
 
@@ -15,7 +27,11 @@ export function getAlerts(): Alert[] {
  * Save alerts array to in-memory store.
  */
 export function saveAlerts(alerts: Alert[]): void {
-  inMemoryAlerts = [...alerts].sort((a, b) => b.timestamp - a.timestamp);
+  const now = Date.now();
+  inMemoryAlerts = [...alerts]
+    .filter(a => (now - a.timestamp) < ALERT_TTL_MS)
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, MAX_ALERTS);
 }
 
 /**

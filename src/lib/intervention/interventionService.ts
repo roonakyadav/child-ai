@@ -2,19 +2,33 @@ import { Intervention, InteractionOutcome } from "@/types";
 import { post } from "../apiClient";
 
 // In-memory intervention store for child session privacy (never persisted to localStorage)
+const MAX_INTERVENTIONS = 50;
+const INTERVENTION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// In-memory intervention store for child session privacy (never persisted to localStorage)
 let inMemoryInterventions: Intervention[] = [];
+
+/**
+ * Prune interventions older than 24 hours
+ */
+function pruneExpiredInterventions(): void {
+  const now = Date.now();
+  inMemoryInterventions = inMemoryInterventions.filter(i => (now - i.timestamp) < INTERVENTION_TTL_MS);
+}
 
 /**
  * Saves an intervention to in-memory store.
  */
 export function saveIntervention(intervention: Intervention): void {
-  inMemoryInterventions = [intervention, ...inMemoryInterventions];
+  pruneExpiredInterventions();
+  inMemoryInterventions = [intervention, ...inMemoryInterventions].slice(0, MAX_INTERVENTIONS);
 }
 
 /**
  * Retrieves all interventions from in-memory store.
  */
 export function getInterventions(): Intervention[] {
+  pruneExpiredInterventions();
   return [...inMemoryInterventions];
 }
 

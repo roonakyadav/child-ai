@@ -292,6 +292,68 @@ describe('Server-Authoritative Parent Configuration', () => {
     });
   });
 
+  describe('DELETE /api/config/parent - Reset & Invalidation', () => {
+    it('should reject unauthenticated request with 401', async () => {
+      const res = await request(app).delete('/api/config/parent');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('Authentication required');
+    });
+
+    it('should reject forged session cookie with 401', async () => {
+      const res = await request(app)
+        .delete('/api/config/parent')
+        .set('Cookie', 'parent_session=fake-session-id');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('Authentication required');
+    });
+
+    it('should reset config to defaults, delete session, and clear cookie', async () => {
+      const session = createSession();
+
+      // First, update config to non-default values
+      configService.updateParentConfig({
+        screenTime: { dailyLimit: 120, isLocked: true },
+        aiBehavior: { strictMode: true, customInstructions: 'Custom instructions here' }
+      });
+
+      // Verify custom values are active
+      let current = configService.getParentConfig();
+      expect(current.screenTime.dailyLimit).toBe(120);
+      expect(current.screenTime.isLocked).toBe(true);
+
+      // Perform DELETE
+      const res = await request(app)
+        .delete('/api/config/parent')
+        .set('Cookie', `parent_session=${session.id}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toBe('Parent configuration successfully reset');
+
+      // Verify cookie was cleared
+      const setCookie = res.headers['set-cookie'];
+      expect(setCookie).toBeDefined();
+      expect(setCookie.some(c => c.includes('parent_session=;') || c.includes('parent_session=deleted') || c.includes('parent_session=;'))).toBe(true);
+
+      // Verify config was reset in memory and on disk
+      current = configService.getParentConfig();
+      expect(current.screenTime.dailyLimit).toBe(60);
+      expect(current.screenTime.isLocked).toBe(false);
+      expect(current.aiBehavior.strictMode).toBe(false);
+      expect(current.aiBehavior.customInstructions).toBe('');
+
+      const diskConfig = JSON.parse(fs.readFileSync(testStorePath, 'utf8'));
+      expect(diskConfig.screenTime.dailyLimit).toBe(60);
+      expect(diskConfig.screenTime.isLocked).toBe(false);
+
+      // Verify previous session was invalidated in authService
+      const followUp = await request(app)
+        .get('/api/config/parent')
+        .set('Cookie', `parent_session=${session.id}`);
+      expect(followUp.status).toBe(401);
+    });
+  });
+
   describe('Server-Side Enforcement in Child Chat Route', () => {
     it('should reject child chat with 403 APP_LOCKED when app is locked by parent', async () => {
       // Mock Groq API

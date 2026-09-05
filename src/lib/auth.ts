@@ -92,6 +92,8 @@ export async function verifySession(): Promise<boolean> {
   }
 }
 
+import { clearChildSessionData } from './childSession';
+
 /**
  * Logout from server session
  * Invalidates the server-side session and clears the cookie
@@ -103,6 +105,9 @@ export async function logout(): Promise<void> {
   } catch (error) {
     console.error('Logout error:', error);
   }
+
+  // Centrally purge all transient child session data
+  clearChildSessionData();
 
   // Clear stale sensitive data from localStorage (backward compatibility for old installations)
   localStorage.removeItem("parent_pin_hash");

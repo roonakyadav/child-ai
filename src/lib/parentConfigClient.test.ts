@@ -119,4 +119,36 @@ describe('Parent Configuration Client', () => {
       );
     });
   });
+
+  describe('deleteServerParentConfig', () => {
+    it('should issue DELETE request to parent config endpoint and return true on success', async () => {
+      const { deleteServerParentConfig } = await import('./parentConfigClient');
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ success: true, message: 'Parent configuration successfully reset' }))
+      });
+
+      const success = await deleteServerParentConfig();
+      expect(success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3001/api/config/parent',
+        expect.objectContaining({
+          method: 'DELETE'
+        })
+      );
+    });
+
+    it('should return false on failure or network error', async () => {
+      const { deleteServerParentConfig } = await import('./parentConfigClient');
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve(JSON.stringify({ error: 'Server error' }))
+      });
+
+      const success = await deleteServerParentConfig();
+      expect(success).toBe(false);
+    });
+  });
 });
+

@@ -136,8 +136,19 @@ export function getChildStats(): ChildStats {
   };
 }
 
+const MAX_ACTIVITIES = 50;
+const ACTIVITY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 // In-memory activity store for child session privacy (never persisted to localStorage)
 let inMemoryActivities: Activity[] = [];
+
+/**
+ * Prune activities that exceed the 24-hour retention window
+ */
+function pruneExpiredActivities(): void {
+  const now = Date.now();
+  inMemoryActivities = inMemoryActivities.filter(a => (now - a.timestamp) < ACTIVITY_TTL_MS);
+}
 
 /**
  * Save a new activity to in-memory state
@@ -145,12 +156,13 @@ let inMemoryActivities: Activity[] = [];
  */
 export function saveActivity(activity: Activity): void {
   try {
+    pruneExpiredActivities();
     // Add new activity at the beginning (newest first)
     inMemoryActivities.unshift(activity);
     
     // Limit to last 50 activities for better data-driven insights
-    if (inMemoryActivities.length > 50) {
-      inMemoryActivities = inMemoryActivities.slice(0, 50);
+    if (inMemoryActivities.length > MAX_ACTIVITIES) {
+      inMemoryActivities = inMemoryActivities.slice(0, MAX_ACTIVITIES);
     }
   } catch (error) {
     console.error("[Activity] Error saving activity:", error);
@@ -175,6 +187,7 @@ export interface ActivitySummary {
  * @returns Array of activities
  */
 export function getActivity(): Activity[] {
+  pruneExpiredActivities();
   return [...inMemoryActivities];
 }
 

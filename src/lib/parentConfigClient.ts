@@ -5,7 +5,7 @@
  * parent configuration and legacy migration endpoints.
  */
 
-import { get, put, post } from './apiClient';
+import { get, put, post, del } from './apiClient';
 import { API_ENDPOINTS } from './apiConfig';
 
 export type ScreenTimeMode = 'strict' | 'balanced' | 'learning';
@@ -153,6 +153,19 @@ export async function migrateLegacyConfigToServer(): Promise<boolean> {
     return false;
   } catch (error) {
     console.error('[ParentConfigClient] Migration failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Reset parent configuration to defaults on the server and invalidate session
+ */
+export async function deleteServerParentConfig(): Promise<boolean> {
+  try {
+    const res = await del<{ success: boolean; message: string }>(API_ENDPOINTS.parentConfig);
+    return res?.success === true;
+  } catch (error) {
+    console.error('[ParentConfigClient] Failed to reset server config:', error);
     return false;
   }
 }

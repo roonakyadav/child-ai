@@ -46,6 +46,7 @@ interface AIResponse {
 
 import { getMessages, clearConversation } from "@/lib/conversationStore";
 import { addRecentTopic, getIntentState, setActiveQuiz } from "@/lib/intentStore";
+import { clearChildSessionData } from "@/lib/childSession";
 
 const Index = () => {
   const config = getConfig();
@@ -63,6 +64,12 @@ const Index = () => {
       isAI: m.role === "assistant"
     }));
   });
+
+  const handleNewSession = () => {
+    clearChildSessionData();
+    setMessages([defaultGreeting]);
+    sessionStartRef.current = Date.now();
+  };
   const [aiMode, setAiMode] = useState<AIMode>(getCurrentMode());
   const [remainingTime, setRemainingTime] = useState<number>(getModeRemainingTime());
   const [strictRemaining, setStrictRemaining] = useState<number>(getStrictModeRemainingTime());
@@ -398,6 +405,7 @@ const Index = () => {
         childName="Alex"
         mode={aiMode === "fun" ? "fun" : "learn"}
         onToggleMode={() => handleModeChange(aiMode === "fun" ? "learning" : "fun")}
+        onNewSession={handleNewSession}
       />
 
       {/* Mode indicator */}

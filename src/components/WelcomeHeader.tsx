@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Shield, Sparkles, Star } from "lucide-react";
+import { Shield, Sparkles, Star, RotateCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import avatarImg from "@/assets/ai-buddy.png";
 import { getChildStats } from "@/lib/activity";
@@ -8,9 +8,10 @@ interface WelcomeHeaderProps {
   childName: string;
   mode: "learn" | "fun";
   onToggleMode: () => void;
+  onNewSession?: () => void;
 }
 
-const WelcomeHeader = ({ childName, mode, onToggleMode }: WelcomeHeaderProps) => {
+const WelcomeHeader = ({ childName, mode, onToggleMode, onNewSession }: WelcomeHeaderProps) => {
   const navigate = useNavigate();
   const stats = getChildStats();
 
@@ -69,6 +70,20 @@ const WelcomeHeader = ({ childName, mode, onToggleMode }: WelcomeHeaderProps) =>
 
       {/* Right: Parent Dashboard + Mode Toggle */}
       <div className="flex items-center gap-4">
+        {/* New Session Button */}
+        {onNewSession && (
+          <motion.button
+            onClick={onNewSession}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            title="Start a fresh chat session"
+            className="flex items-center gap-1.5 rounded-2xl bg-muted/50 px-3.5 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-muted hover:text-foreground transition-all border border-transparent hover:border-muted-foreground/10 shadow-soft"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span>New Chat</span>
+          </motion.button>
+        )}
+
         {/* Parent Dashboard Button */}
         <motion.button
           onClick={() => navigate("/parent")}

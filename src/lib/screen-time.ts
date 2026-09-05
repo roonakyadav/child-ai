@@ -50,6 +50,9 @@ export function setScreenTimeSettings(settings: ScreenTimeSettings): void {
   }
 }
 
+const MAX_USAGE_SESSIONS = 100;
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 // In-memory usage sessions store for child session privacy (never persisted to localStorage)
 let inMemorySessions: UsageSession[] = [];
 
@@ -78,10 +81,13 @@ export function getUsedMinutesToday(): number {
  * Record a new session segment in memory
  */
 export function addUsageSession(start: number, end: number): void {
-  // Keep only last 30 days of sessions in memory
-  const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-  inMemorySessions = inMemorySessions.filter(s => s.start > thirtyDaysAgo);
+  // Keep only last 7 days of sessions in memory
+  const cutoff = Date.now() - SESSION_TTL_MS;
+  inMemorySessions = inMemorySessions.filter(s => s.start > cutoff);
   inMemorySessions.push({ start, end });
+  if (inMemorySessions.length > MAX_USAGE_SESSIONS) {
+    inMemorySessions = inMemorySessions.slice(-MAX_USAGE_SESSIONS);
+  }
 }
 
 /**

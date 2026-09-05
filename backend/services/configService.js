@@ -190,6 +190,17 @@ function migrateLegacyConfig(legacyPayload) {
 }
 
 /**
+ * Reset parent configuration to defaults and persist atomically
+ */
+function resetParentConfig() {
+  const resetConfig = deepClone(DEFAULT_PARENT_CONFIG);
+  resetConfig.updatedAt = Date.now();
+  saveToDisk(resetConfig);
+  cachedConfig = resetConfig;
+  return deepClone(cachedConfig);
+}
+
+/**
  * Reset service state (for unit testing)
  */
 function _resetForTesting(testPath = null) {
@@ -206,5 +217,6 @@ module.exports = {
   getParentConfig,
   updateParentConfig,
   migrateLegacyConfig,
+  resetParentConfig,
   _resetForTesting
 };

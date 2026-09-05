@@ -24,9 +24,18 @@ export interface PatternRisk {
   confidence: number;
 }
 
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const SAFETY_CACHE_LIMIT = 100;
+const PATTERN_CACHE_LIMIT = 20;
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour TTL
+
 // In-memory safety and pattern caches for child session privacy (never persisted to localStorage)
-const safetyCache: Record<string, RiskResult> = {};
-const patternCache: Record<string, PatternRisk> = {};
+const safetyCache: Record<string, CacheEntry<RiskResult>> = {};
+const patternCache: Record<string, CacheEntry<PatternRisk>> = {};
 
 /**
  * Clear in-memory safety caches (for resets and testing)
@@ -50,9 +59,12 @@ export async function detectRiskyMessage(message: string): Promise<RiskResult> {
   // 0. Global Strict Mode Override (Optional: Add specific logic if needed)
   const isStrict = isStrictModeEnabled();
   
-  // 1. Check Cache
+  // 1. Check Cache with TTL validation
   if (safetyCache[normalized]) {
-    return safetyCache[normalized];
+    if (Date.now() - safetyCache[normalized].timestamp < CACHE_TTL_MS) {
+      return safetyCache[normalized].data;
+    }
+    delete safetyCache[normalized];
   }
 
   try {
@@ -70,11 +82,14 @@ export async function detectRiskyMessage(message: string): Promise<RiskResult> {
       result.reason = `[Strict Mode Override] ${result.reason}`;
     }
 
-    // 2. Store in Cache
-    safetyCache[normalized] = result;
+    // 2. Store in Cache with timestamp
+    safetyCache[normalized] = {
+      data: result,
+      timestamp: Date.now()
+    };
     // Limit cache size to 100 entries
     const keys = Object.keys(safetyCache);
-    if (keys.length > 100) {
+    if (keys.length > SAFETY_CACHE_LIMIT) {
       delete safetyCache[keys[0]];
     }
 
@@ -111,17 +126,23 @@ export async function analyzeBehaviorPattern(messages: { text: string; timestamp
   const cacheKey = `pattern-${messages.length}-${lastMsg.timestamp}`;
   
   if (patternCache[cacheKey]) {
-    return patternCache[cacheKey];
+    if (Date.now() - patternCache[cacheKey].timestamp < CACHE_TTL_MS) {
+      return patternCache[cacheKey].data;
+    }
+    delete patternCache[cacheKey];
   }
 
   try {
     const result: PatternRisk = await post<PatternRisk>(API_ENDPOINTS.analyzePattern, { messages });
 
-    // Cache the result
-    patternCache[cacheKey] = result;
+    // Cache the result with timestamp
+    patternCache[cacheKey] = {
+      data: result,
+      timestamp: Date.now()
+    };
     // Limit cache size
     const keys = Object.keys(patternCache);
-    if (keys.length > 20) {
+    if (keys.length > PATTERN_CACHE_LIMIT) {
       delete patternCache[keys[0]];
     }
 

@@ -1,3 +1,5 @@
+const MAX_INJECTIONS = 20;
+
 // In-memory injection store for child session privacy (never persisted to localStorage)
 let inMemoryInjections: string[] = [];
 
@@ -6,6 +8,9 @@ let inMemoryInjections: string[] = [];
  */
 export function injectSystemMessage(message: string): void {
   inMemoryInjections.push(message);
+  if (inMemoryInjections.length > MAX_INJECTIONS) {
+    inMemoryInjections = inMemoryInjections.slice(-MAX_INJECTIONS);
+  }
 }
 
 /**

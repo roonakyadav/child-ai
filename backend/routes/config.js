@@ -50,4 +50,33 @@ router.post('/parent/migrate', requireParentAuth, validateBody('parentConfigMigr
   }
 });
 
+const { deleteSession } = require('../services/authService');
+
+// DELETE /api/config/parent - Reset parent configuration and invalidate session
+router.delete('/parent', requireParentAuth, (req, res) => {
+  try {
+    configService.resetParentConfig();
+
+    const sessionId = req.cookies ? req.cookies.parent_session : null;
+    if (sessionId) {
+      deleteSession(sessionId);
+    }
+
+    res.clearCookie('parent_session', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/'
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Parent configuration successfully reset'
+    });
+  } catch (error) {
+    console.error('[Config] Error resetting parent configuration:', error.message);
+    res.status(500).json({ error: 'Failed to reset configuration' });
+  }
+});
+
 module.exports = router;

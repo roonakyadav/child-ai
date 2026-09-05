@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { gatherAllAppData, generatePDFReport, ReportData } from "@/lib/reportService";
 import { getConfig } from "@/lib/configStore";
 import { post } from "@/lib/apiClient";
+import { deleteServerParentConfig } from "@/lib/parentConfigClient";
+import { clearChildSessionData } from "@/lib/childSession";
 
 const ParentSettings = () => {
   const config = getConfig();
@@ -118,8 +120,10 @@ const ParentSettings = () => {
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (window.confirm("Are you sure you want to reset all data? This cannot be undone.")) {
+      await deleteServerParentConfig().catch(() => {});
+      clearChildSessionData();
       localStorage.clear();
       window.location.href = "/";
     }
