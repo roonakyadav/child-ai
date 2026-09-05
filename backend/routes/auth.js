@@ -15,9 +15,9 @@ const {
   setParentPinHash,
   hasParentPin,
   verifyPinHash,
-  updateParentPinHash,
-  SESSION_EXPIRY_MS
+  updateParentPinHash
 } = require('../services/authService');
+const { getSessionCookieOptions, getClearCookieOptions } = require('../lib/cookieConfig');
 
 // POST /api/auth/parent/setup
 // Initial setup of parent PIN (only allowed if PIN is not yet configured)
@@ -72,13 +72,7 @@ router.post('/parent/login', authLimiter, validateBody('login'), async (req, res
   const session = createSession(oldSessionId);
 
   // Set HTTP-only cookie
-  res.cookie('parent_session', session.id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: SESSION_EXPIRY_MS,
-    path: '/'
-  });
+  res.cookie('parent_session', session.id, getSessionCookieOptions(req));
 
   res.status(200).json({ success: true });
 });
@@ -110,12 +104,7 @@ router.post('/parent/logout', generalLimiter, (req, res) => {
     deleteSession(sessionId);
   }
 
-  res.clearCookie('parent_session', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/'
-  });
+  res.clearCookie('parent_session', getClearCookieOptions(req));
 
   res.status(200).json({ success: true });
 });

@@ -6,12 +6,13 @@
 
 const express = require('express');
 const cookieParser = require('cookie-parser');
-const { PORT } = require('./config');
+const { PORT, TRUST_PROXY } = require('./config');
 const logger = require('./lib/logger');
 
 // Import middleware
 const { requestIdMiddleware } = require('./middleware/requestId');
 const { requestLoggerMiddleware } = require('./middleware/requestLogger');
+const securityHeadersMiddleware = require('./middleware/securityHeaders');
 const corsMiddleware = require('./middleware/cors');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -29,14 +30,19 @@ const configRouter = require('./routes/config');
 
 const app = express();
 
-// Trust proxy for rate limiting when behind reverse proxy (Vercel, etc.)
-app.set('trust proxy', 1);
+// Suppress Express framework fingerprinting
+app.disable('x-powered-by');
+
+// Trust proxy for rate limiting and HTTPS detection when behind reverse proxy (Vercel, Cloudflare, AWS ALB)
+app.set('trust proxy', TRUST_PROXY);
 
 // Register observability and security middleware
 app.use(requestIdMiddleware);
 app.use(requestLoggerMiddleware);
+app.use(securityHeadersMiddleware);
 app.use(corsMiddleware);
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 app.use(cookieParser());
 
 // Register routers
@@ -50,6 +56,11 @@ app.use('/api', safetyRouter);
 app.use('/api', engagementRouter);
 app.use('/api', reportsRouter);
 app.use('/api', testRouter);
+
+// 404 handler for unmatched routes
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found', code: 'NOT_FOUND' });
+});
 
 // Register centralized error handling middleware (must be last)
 app.use(errorHandler);

@@ -30,7 +30,11 @@ function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-va
   let clientMessage = 'Internal server error';
   let clientCode = err.code || 'SERVER_ERROR';
 
-  if (err.isSafeError) {
+  if (statusCode === 413 || err.type === 'entity.too.large') {
+    statusCode = 413;
+    clientMessage = 'Payload too large';
+    clientCode = 'PAYLOAD_TOO_LARGE';
+  } else if (err.isSafeError) {
     clientMessage = err.message;
     clientCode = err.code || 'ERROR';
   } else if (statusCode < 500) {

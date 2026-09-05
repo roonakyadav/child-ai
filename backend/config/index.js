@@ -55,6 +55,20 @@ if (NODE_ENV === 'production') {
   validateProductionConfig(process.env, true);
 }
 
+function parseTrustProxy() {
+  const envVal = process.env.TRUST_PROXY;
+  if (!envVal) {
+    return NODE_ENV === 'production' ? 1 : 'loopback';
+  }
+  if (envVal === 'true') return true;
+  if (envVal === 'false') return false;
+  const num = parseInt(envVal, 10);
+  if (!isNaN(num)) return num;
+  return envVal;
+}
+
+const TRUST_PROXY = parseTrustProxy();
+
 module.exports = {
   PORT,
   NODE_ENV,
@@ -68,5 +82,6 @@ module.exports = {
   GROQ_API_URL,
   GROQ_TIMEOUT_MS,
   allowedOrigins,
-  CONFIG_STORE_PATH
+  CONFIG_STORE_PATH,
+  TRUST_PROXY
 };
